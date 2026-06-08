@@ -1,0 +1,885 @@
+/* styles.css - Diseño Deportivo Claro (Mobile-First) para BiciLog */
+
+:root {
+  /* Paleta de Colores de Alta Visibilidad */
+  --bg-primary: #F4F6F9;
+  --bg-card: #FFFFFF;
+  --text-main: #1E272E;
+  --text-muted: #57606F;
+  --color-accent: #0080FF;      /* Azul eléctrico vibrante */
+  --color-accent-light: #EBF5FF;
+  --color-success: #1DD1A1;     /* Verde deportivo */
+  --color-success-light: #E8FDF8;
+  --color-danger: #FF6B6B;      /* Rojo deportivo */
+  --color-danger-light: #FFEFEF;
+  --color-border: #E8ECEF;
+  --color-shadow: rgba(30, 39, 46, 0.06);
+
+  /* Tipografías */
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sport: 'Outfit', 'Inter', -apple-system, sans-serif;
+}
+
+/* Reset de Dispositivo Móvil */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body {
+  font-family: var(--font-main);
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Contenedor Principal (Simula una App Nativa) */
+#app-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 480px; /* Centrado en pantallas grandes como tabletas/PC */
+  margin: 0 auto;
+  background-color: var(--bg-primary);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+/* Estructura de Pantallas (SPA) */
+.app-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+  /* Ajuste para notch de iOS */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+}
+
+.app-screen.active {
+  display: flex;
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Contenido Interno Desplazable */
+.screen-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ocultar barra de scroll para limpieza visual */
+.screen-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* Encabezados de Pantalla (Headers) */
+.app-header {
+  height: 64px;
+  min-height: 64px;
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 10;
+}
+
+.app-logo {
+  font-family: var(--font-sport);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.app-logo .highlight {
+  color: var(--color-accent);
+}
+
+.header-title {
+  font-family: var(--font-sport);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* Botones de Icono (Rediseñados para Toque Cómodo) */
+.icon-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.icon-button:active {
+  background-color: var(--bg-primary);
+}
+
+.icon-button.danger-icon {
+  color: var(--color-danger);
+}
+
+.icon-button.danger-icon:active {
+  background-color: var(--color-danger-light);
+}
+
+/* --- PANTALLA 1: DASHBOARD --- */
+
+/* Hero de Estadísticas Históricas */
+.stats-hero {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 24px 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px var(--color-shadow);
+  border: 1px solid var(--color-border);
+}
+
+.stats-hero-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.hero-stat-box {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-stat-box:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+
+.hero-stat-value {
+  font-family: var(--font-sport);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.hero-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-top: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Tarjetas Generales */
+.section-card {
+  background-color: var(--bg-card);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px var(--color-shadow);
+  border: 1px solid var(--color-border);
+}
+
+.card-title {
+  font-family: var(--font-sport);
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chart-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Historial de Rodadas */
+.recent-rides-section h2 {
+  font-family: var(--font-sport);
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.rides-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ride-card {
+  background-color: var(--bg-card);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px var(--color-shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.ride-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 4px var(--color-shadow);
+}
+
+.ride-card-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ride-card-title {
+  font-family: var(--font-sport);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ride-card-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ride-card-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ride-card-metric {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+}
+
+.ride-card-metric .val {
+  font-family: var(--font-sport);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-accent);
+}
+
+.ride-card-metric .lbl {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Botón Flotante de Registro (FAB) */
+.fab-button {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 52px;
+  border-radius: 26px;
+  border: none;
+  background-color: var(--color-accent);
+  color: #FFFFFF;
+  font-family: var(--font-sport);
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 24px;
+  box-shadow: 0 6px 20px rgba(0, 128, 255, 0.3);
+  cursor: pointer;
+  z-index: 10;
+  transition: transform 0.2s, background-color 0.2s;
+  white-space: nowrap;
+}
+
+.fab-button:active {
+  transform: translateX(-50%) scale(0.96);
+  background-color: #0066cc;
+}
+
+/* --- PANTALLA 2: GRABACIÓN EN VIVO (RODADA) --- */
+
+.tracking-header {
+  background-color: var(--bg-card);
+}
+
+.live-badge {
+  background-color: var(--color-danger-light);
+  color: var(--color-danger);
+  font-family: var(--font-sport);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 6px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.accuracy-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+/* Layout de grabación */
+.recording-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Panel de control de sensores (Emparejamiento) */
+.sensors-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sensor-connect-pill {
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  box-shadow: 0 2px 6px var(--color-shadow);
+}
+
+.sensor-icon {
+  font-size: 18px;
+}
+
+.sensor-status-text {
+  font-size: 13px;
+  font-weight: 600;
+  flex-grow: 1;
+  margin-left: 12px;
+}
+
+.sensor-connect-pill.connected {
+  border-color: var(--color-success);
+  background-color: var(--color-success-light);
+}
+
+.sensor-connect-pill.connected .sensor-status-text {
+  color: #0d8a67;
+}
+
+.sensor-action-btn {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 30px;
+}
+
+.sensor-action-btn:active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.sensor-connect-pill.connected .sensor-action-btn {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+/* Visualización Principal: Velocidad y Cronómetro */
+.main-metric-display {
+  background-color: var(--bg-card);
+  border-radius: 24px;
+  padding: 30px 16px 20px 16px;
+  text-align: center;
+  box-shadow: 0 4px 20px var(--color-shadow);
+  border: 1px solid var(--color-border);
+}
+
+.speed-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.speed-value {
+  font-family: var(--font-sport);
+  font-size: 78px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-main);
+  letter-spacing: -2px;
+}
+
+.speed-unit {
+  font-family: var(--font-sport);
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+
+.timer-container {
+  margin-top: 16px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+
+.timer-value {
+  font-family: var(--font-sport);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+/* Grid de métricas */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.metric-box {
+  background-color: var(--bg-card);
+  border-radius: 18px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px var(--color-shadow);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.metric-box .metric-icon {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 16px;
+  opacity: 0.8;
+}
+
+.metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.metric-box .metric-value {
+  font-family: var(--font-sport);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.metric-sub-unit {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hr-zone-tag {
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Colores de cajas específicas */
+.hr-metric .metric-value {
+  color: var(--color-danger);
+}
+.cad-metric .metric-value {
+  color: var(--color-success);
+}
+
+/* Simulador y Demo */
+.simulation-panel {
+  background: var(--bg-card);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px dashed var(--color-accent);
+}
+
+.simulation-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+/* Botón Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  min-width: 44px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .2s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .2s;
+}
+
+input:checked + .slider {
+  background-color: var(--color-accent);
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.slider.round {
+  border-radius: 24px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/* Acciones de Grabación (Botones Circulares Grandes) */
+.recording-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  margin-top: 10px;
+  padding-bottom: 20px;
+}
+
+.circle-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px var(--color-shadow);
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.circle-btn:active {
+  transform: scale(0.94);
+}
+
+.pause-btn {
+  background-color: var(--color-danger-light);
+  color: var(--color-danger);
+}
+.resume-btn {
+  background-color: var(--color-success-light);
+  color: var(--color-success);
+}
+.stop-btn {
+  background-color: var(--text-main);
+  color: #FFFFFF;
+}
+
+.hide {
+  display: none !important;
+}
+
+/* --- PANTALLA 3: DETALLE DE RODADA --- */
+
+.ride-detail-hero {
+  background-color: var(--bg-card);
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--color-border);
+}
+
+.detail-ride-title {
+  font-family: var(--font-sport);
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.detail-ride-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.detail-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.detail-stat-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-stat-card .val {
+  font-family: var(--font-sport);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.detail-stat-card .lbl {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* --- PANTALLA 4: AJUSTES --- */
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-group {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px var(--color-shadow);
+}
+
+.group-title {
+  font-family: var(--font-sport);
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  color: var(--color-accent);
+  letter-spacing: 0.5px;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+}
+
+.form-row:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.form-row label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.form-row input[type="number"] {
+  width: 80px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  background-color: var(--bg-primary);
+}
+
+.form-row input[type="number"]:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.form-row-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+/* Entradas Manuales de Zonas */
+.manual-zones-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+  margin-top: 12px;
+}
+
+.zone-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.zone-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.z1-dot { background-color: #00D2D3; }
+.z2-dot { background-color: #1DD1A1; }
+.z3-dot { background-color: #FECA57; }
+.z4-dot { background-color: #FF9F43; }
+.z5-dot { background-color: #FF6B6B; }
+
+.zone-input-row label {
+  flex-grow: 1;
+}
+
+.zone-input-row input {
+  width: 60px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  background-color: var(--bg-primary);
+}
+
+/* Preview de zonas automáticas */
+.auto-zones-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+  margin-top: 12px;
+}
+
+.preview-zone-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.preview-zone-item .val {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.submit-btn {
+  height: 52px;
+  border-radius: 16px;
+  border: none;
+  background-color: var(--color-accent);
+  color: #FFFFFF;
+  font-family: var(--font-sport);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px var(--color-shadow);
+  transition: background-color 0.2s;
+  margin-bottom: 20px;
+}
+
+.submit-btn:active {
+  background-color: #0066cc;
+}

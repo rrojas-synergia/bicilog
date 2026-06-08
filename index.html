@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <!-- Viewport móvil optimizado para evitar zoom extraño y permitir pantalla completa en móviles -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>BiciLog - GPS & Sensores Bluetooth</title>
+  <!-- Fuentes modernas deportivas de Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Web App Manifest opcional para soporte PWA -->
+  <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+<body>
+  <div id="app-container">
+    
+    <!-- PANTALLA 1: DASHBOARD / INICIO -->
+    <section id="screen-dashboard" class="app-screen active">
+      <header class="app-header">
+        <div class="header-left">
+          <span class="app-logo">Bici<span class="highlight">Log</span></span>
+        </div>
+        <button id="btn-open-settings" class="icon-button" aria-label="Ajustes">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+      </header>
+
+      <main class="screen-content">
+        <!-- Tarjeta de Resumen Histórico -->
+        <div class="stats-hero">
+          <div class="stats-hero-row">
+            <div class="hero-stat-box">
+              <span class="hero-stat-value" id="stats-total-km">0.0</span>
+              <span class="hero-stat-label">Km Totales</span>
+            </div>
+            <div class="hero-stat-box">
+              <span class="hero-stat-value" id="stats-total-time">00:00</span>
+              <span class="hero-stat-label">Tiempo Total</span>
+            </div>
+            <div class="hero-stat-box">
+              <span class="hero-stat-value" id="stats-total-rides">0</span>
+              <span class="hero-stat-label">Rodadas</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gráfico semanal -->
+        <div class="section-card">
+          <h2 class="card-title">Resumen Últimos 7 Días</h2>
+          <div id="weekly-chart-container" class="chart-wrapper">
+            <!-- Renderizado dinámico desde JS -->
+          </div>
+        </div>
+
+        <!-- Lista de Rodadas Recientes -->
+        <div class="recent-rides-section">
+          <div class="section-header-row">
+            <h2>Historial de Actividades</h2>
+          </div>
+          <div id="recent-rides-list" class="rides-list">
+            <!-- Generado dinámicamente -->
+            <div class="empty-state">
+              <p>No tienes rodadas registradas. ¡Sal a rodar!</p>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Botón Flotante para Grabar -->
+      <button id="btn-start-ride" class="fab-button" aria-label="Iniciar Nueva Rodada">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+        <span>Nueva Rodada</span>
+      </button>
+    </section>
+
+    <!-- PANTALLA 2: GRABACIÓN EN VIVO (RODADA) -->
+    <section id="screen-recording" class="app-screen">
+      <header class="app-header tracking-header">
+        <span class="status-indicator live-badge">EN VIVO</span>
+        <div id="gps-accuracy-badge" class="accuracy-badge">GPS: --</div>
+      </header>
+
+      <main class="screen-content recording-layout">
+        <!-- Panel de Sensores / Conexión -->
+        <div class="sensors-control-panel">
+          <div class="sensor-connect-pill" id="sensor-pill-hr">
+            <span class="sensor-icon">❤️</span>
+            <span class="sensor-status-text">FC: Desconectado</span>
+            <button id="btn-connect-hr" class="sensor-action-btn">Emparejar</button>
+          </div>
+          <div class="sensor-connect-pill" id="sensor-pill-csc">
+            <span class="sensor-icon">⚙️</span>
+            <span class="sensor-status-text">Cad: Desconectado</span>
+            <button id="btn-connect-csc" class="sensor-action-btn">Emparejar</button>
+          </div>
+        </div>
+
+        <!-- Métrica Principal: Velocidad -->
+        <div class="main-metric-display">
+          <div class="speed-container">
+            <span id="live-speed" class="speed-value">0.0</span>
+            <span class="speed-unit">km/h</span>
+          </div>
+          <div class="timer-container">
+            <span id="live-timer" class="timer-value">00:00:00</span>
+          </div>
+        </div>
+
+        <!-- Grid de Métricas Secundarias -->
+        <div class="metrics-grid">
+          <!-- Distancia -->
+          <div class="metric-box">
+            <span class="metric-icon">📏</span>
+            <span class="metric-label">Distancia</span>
+            <span id="live-distance" class="metric-value">0.00</span>
+            <span class="metric-sub-unit">KM</span>
+          </div>
+          <!-- Frecuencia Cardíaca -->
+          <div class="metric-box hr-metric">
+            <span class="metric-icon">❤️</span>
+            <span class="metric-label">Frec. Cardíaca</span>
+            <span id="live-hr" class="metric-value">--</span>
+            <span class="metric-sub-unit">BPM <span id="live-hr-zone" class="hr-zone-tag">--</span></span>
+          </div>
+          <!-- Cadencia -->
+          <div class="metric-box cad-metric">
+            <span class="metric-icon">⚙️</span>
+            <span class="metric-label">Cadencia</span>
+            <span id="live-cadence" class="metric-value">--</span>
+            <span class="metric-sub-unit">RPM</span>
+          </div>
+          <!-- Ascenso -->
+          <div class="metric-box">
+            <span class="metric-icon">⛰️</span>
+            <span class="metric-label">Ascenso total</span>
+            <span id="live-ascent" class="metric-value">0</span>
+            <span class="metric-sub-unit">m</span>
+          </div>
+          <!-- Respiración (Estimada) -->
+          <div class="metric-box">
+            <span class="metric-icon">💨</span>
+            <span class="metric-label">Respiración</span>
+            <span id="live-respiration" class="metric-value">--</span>
+            <span class="metric-sub-unit">RPM</span>
+          </div>
+          <!-- Temperatura (GPS/Local) -->
+          <div class="metric-box">
+            <span class="metric-icon">🌡️</span>
+            <span class="metric-label">Temperatura</span>
+            <span id="live-temp" class="metric-value">22</span>
+            <span class="metric-sub-unit">°C</span>
+          </div>
+        </div>
+
+        <!-- Panel de Simulación / Modo Demo -->
+        <div class="simulation-panel">
+          <label class="toggle-switch">
+            <input type="checkbox" id="chk-simulate-data">
+            <span class="slider round"></span>
+          </label>
+          <span class="simulation-label">Simular sensores y movimiento (Modo Demo)</span>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="recording-actions">
+          <button id="btn-pause-ride" class="circle-btn pause-btn" aria-label="Pausar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+          </button>
+          <button id="btn-resume-ride" class="circle-btn resume-btn hide" aria-label="Reanudar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          </button>
+          <button id="btn-stop-ride" class="circle-btn stop-btn" aria-label="Detener y Guardar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16"></rect></svg>
+          </button>
+        </div>
+      </main>
+    </section>
+
+    <!-- PANTALLA 3: DETALLE DE RODADA -->
+    <section id="screen-detail" class="app-screen">
+      <header class="app-header">
+        <button id="btn-detail-back" class="icon-button" aria-label="Volver">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <span class="header-title">Resumen de Rodada</span>
+        <button id="btn-delete-ride" class="icon-button danger-icon" aria-label="Eliminar Rodada">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+        </button>
+      </header>
+
+      <main class="screen-content">
+        <div class="ride-detail-hero">
+          <h2 id="detail-title" class="detail-ride-title">Rodada Matutina</h2>
+          <span id="detail-date" class="detail-ride-date">Domingo, 7 de junio de 2026</span>
+        </div>
+
+        <!-- Cuadrícula de Totales -->
+        <div class="detail-stats-grid">
+          <div class="detail-stat-card">
+            <span class="val" id="detail-val-distance">0.00</span>
+            <span class="lbl">Kilómetros</span>
+          </div>
+          <div class="detail-stat-card">
+            <span class="val" id="detail-val-time">00:00:00</span>
+            <span class="lbl">Tiempo Total</span>
+          </div>
+          <div class="detail-stat-card">
+            <span class="val" id="detail-val-speed">0.0</span>
+            <span class="lbl">Velocidad Prom (km/h)</span>
+          </div>
+          <div class="detail-stat-card">
+            <span class="val" id="detail-val-ascent">0</span>
+            <span class="lbl">Ascenso (m)</span>
+          </div>
+          <div class="detail-stat-card">
+            <span class="val" id="detail-val-hr">0</span>
+            <span class="lbl">FC Promedio</span>
+          </div>
+          <div class="detail-stat-card">
+            <span class="val" id="detail-val-cadence">0</span>
+            <span class="lbl">Cadencia Prom</span>
+          </div>
+          <div class="detail-stat-card">
+            <span class="val" id="detail-val-respiration">0</span>
+            <span class="lbl">Resp. Prom (RPM)</span>
+          </div>
+          <div class="detail-stat-card">
+            <span class="val" id="detail-val-temp">0</span>
+            <span class="lbl">Temp Prom (°C)</span>
+          </div>
+        </div>
+
+        <!-- Perfil del Gráfico de Línea -->
+        <div class="section-card">
+          <h3 class="card-title">Perfil de Rodada (FC vs Velocidad)</h3>
+          <div id="detail-ride-profile-chart" class="chart-wrapper">
+            <!-- SVG Dinámico -->
+          </div>
+        </div>
+
+        <!-- Distribución de Zonas de FC -->
+        <div class="section-card">
+          <h3 class="card-title">Zonas de Frecuencia Cardíaca</h3>
+          <div id="detail-hr-zones-chart">
+            <!-- Barras generadas por JS -->
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- PANTALLA 4: AJUSTES / CONFIGURACIÓN DE ZONAS -->
+    <section id="screen-settings" class="app-screen">
+      <header class="app-header">
+        <button id="btn-settings-back" class="icon-button" aria-label="Volver">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <span class="header-title">Configuración</span>
+      </header>
+
+      <main class="screen-content">
+        <form id="settings-form" class="settings-form">
+          <!-- Perfil del Ciclista -->
+          <div class="settings-group">
+            <h3 class="group-title">Perfil</h3>
+            <div class="form-row">
+              <label for="set-age">Edad</label>
+              <input type="number" id="set-age" name="age" min="1" max="120" value="30" required>
+            </div>
+            <div class="form-row">
+              <label for="set-weight">Peso (kg)</label>
+              <input type="number" id="set-weight" name="weight" min="1" max="250" value="70" required>
+            </div>
+          </div>
+
+          <!-- Configuración de Zonas de FC -->
+          <div class="settings-group">
+            <h3 class="group-title">Zonas de Frecuencia Cardíaca</h3>
+            
+            <div class="form-row-toggle">
+              <span>Calcular Automáticamente (Fórmula de Edad)</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="set-use-auto" checked>
+                <span class="slider round"></span>
+              </label>
+            </div>
+
+            <!-- Contenedor de Zonas Manuales (se oculta en auto) -->
+            <div id="manual-zones-container" class="manual-zones-inputs hide">
+              <p class="settings-note">Establece el rango de pulsaciones por minuto (BPM) para cada zona de esfuerzo.</p>
+              
+              <div class="zone-input-row">
+                <span class="zone-badge-dot z1-dot"></span>
+                <label>Z1: Recuperación</label>
+                <input type="number" id="z1-min" placeholder="Mín">
+                <span>a</span>
+                <input type="number" id="z1-max" placeholder="Máx">
+              </div>
+              <div class="zone-input-row">
+                <span class="zone-badge-dot z2-dot"></span>
+                <label>Z2: Resistencia</label>
+                <input type="number" id="z2-min" placeholder="Mín">
+                <span>a</span>
+                <input type="number" id="z2-max" placeholder="Máx">
+              </div>
+              <div class="zone-input-row">
+                <span class="zone-badge-dot z3-dot"></span>
+                <label>Z3: Tempo</label>
+                <input type="number" id="z3-min" placeholder="Mín">
+                <span>a</span>
+                <input type="number" id="z3-max" placeholder="Máx">
+              </div>
+              <div class="zone-input-row">
+                <span class="zone-badge-dot z4-dot"></span>
+                <label>Z4: Umbral</label>
+                <input type="number" id="z4-min" placeholder="Mín">
+                <span>a</span>
+                <input type="number" id="z4-max" placeholder="Máx">
+              </div>
+              <div class="zone-input-row">
+                <span class="zone-badge-dot z5-dot"></span>
+                <label>Z5: Anaeróbico</label>
+                <input type="number" id="z5-min" placeholder="Mín">
+                <span>a</span>
+                <input type="number" id="z5-max" placeholder="Máx">
+              </div>
+            </div>
+
+            <div id="auto-zones-preview" class="auto-zones-preview">
+              <!-- Se listarán las zonas calculadas dinámicamente -->
+            </div>
+          </div>
+
+          <button type="submit" class="submit-btn">Guardar Cambios</button>
+        </form>
+      </main>
+    </section>
+
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
