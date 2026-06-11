@@ -5,10 +5,16 @@
   <!-- Viewport móvil optimizado para evitar zoom extraño y permitir pantalla completa en móviles -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>BiciLog - GPS & Sensores Bluetooth</title>
+  
   <!-- Fuentes modernas deportivas de Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet.js para Mapas Offline/Online (CSS y JS) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
   <link rel="stylesheet" href="styles.css">
   <!-- Web App Manifest opcional para soporte PWA -->
   <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
@@ -81,7 +87,7 @@
     <!-- PANTALLA 2: GRABACIÓN EN VIVO (RODADA) -->
     <section id="screen-recording" class="app-screen">
       <header class="app-header tracking-header">
-        <span class="status-indicator live-badge">EN VIVO</span>
+        <span class="status-indicator live-badge" id="live-status-badge">EN VIVO</span>
         <div id="gps-accuracy-badge" class="accuracy-badge">GPS: --</div>
       </header>
 
@@ -100,6 +106,31 @@
           </div>
         </div>
 
+        <!-- Mapa en Vivo Colapsable -->
+        <div id="recording-map-container" class="section-card" style="padding: 0; overflow: hidden; height: 160px; margin-bottom: 0px; position: relative; border: 1px solid var(--color-border);">
+          <div id="recording-map" style="height: 100%; width: 100%;"></div>
+          <div id="map-target-status" class="hr-zone-tag" style="position: absolute; bottom: 8px; left: 8px; z-index: 1000; background: rgba(30, 39, 46, 0.85); display: none;">
+            Destino fijado
+          </div>
+          <div id="map-target-distance" class="hr-zone-tag" style="position: absolute; bottom: 8px; right: 8px; z-index: 1000; background: var(--color-accent); color: white; display: none;">
+            Quedan: -- km
+          </div>
+          <button id="btn-clear-target" style="position: absolute; top: 8px; right: 8px; z-index: 1000; background: var(--color-danger); color: white; border: none; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 4px; cursor: pointer; display: none;">Quitar Destino</button>
+        </div>
+
+        <!-- Widget ClimbPro (Detección de subidas) -->
+        <div id="climbpro-widget" class="section-card hide" style="border-left: 5px solid var(--color-danger); padding: 12px; margin-bottom: 0px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-family: var(--font-sport); font-weight: 800; font-size: 13px; color: var(--color-danger); letter-spacing: 0.5px;">🧗 CLIMBPRO: ¡SUBIDA!</span>
+            <span id="climb-score-badge" class="hr-zone-tag" style="background-color: var(--color-danger); font-size: 9px; font-weight: 800;">Score: --</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; margin-bottom: 4px;">
+            <span>Falta: <span id="climb-dist-left">--</span>m</span>
+            <span>Pendiente: <span id="climb-avg-grade">--</span>%</span>
+          </div>
+          <div id="climb-profile-bars" style="display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #EAEFF2; width: 100%; margin-top: 8px;"></div>
+        </div>
+
         <!-- Métrica Principal: Velocidad -->
         <div class="main-metric-display">
           <div class="speed-container">
@@ -111,7 +142,7 @@
           </div>
         </div>
 
-        <!-- Grid de Métricas Secundarias -->
+        <!-- Grid de Métricas Secundarias (8 Métricas Balanceadas) -->
         <div class="metrics-grid">
           <!-- Distancia -->
           <div class="metric-box">
@@ -119,6 +150,13 @@
             <span class="metric-label">Distancia</span>
             <span id="live-distance" class="metric-value">0.00</span>
             <span class="metric-sub-unit">KM</span>
+          </div>
+          <!-- Ascenso -->
+          <div class="metric-box">
+            <span class="metric-icon">⛰️</span>
+            <span class="metric-label">Ascenso total</span>
+            <span id="live-ascent" class="metric-value">0</span>
+            <span class="metric-sub-unit">m</span>
           </div>
           <!-- Frecuencia Cardíaca -->
           <div class="metric-box hr-metric">
@@ -134,12 +172,19 @@
             <span id="live-cadence" class="metric-value">--</span>
             <span class="metric-sub-unit">RPM</span>
           </div>
-          <!-- Ascenso -->
+          <!-- Potencia Estimada (Watts) -->
+          <div class="metric-box watts-metric">
+            <span class="metric-icon">⚡</span>
+            <span class="metric-label">Potencia Est.</span>
+            <span id="live-watts" class="metric-value">--</span>
+            <span class="metric-sub-unit">W</span>
+          </div>
+          <!-- Pendiente Actual (%) -->
           <div class="metric-box">
-            <span class="metric-icon">⛰️</span>
-            <span class="metric-label">Ascenso total</span>
-            <span id="live-ascent" class="metric-value">0</span>
-            <span class="metric-sub-unit">m</span>
+            <span class="metric-icon">📈</span>
+            <span class="metric-label">Pendiente</span>
+            <span id="live-grade" class="metric-value">0%</span>
+            <span class="metric-sub-unit">Grado</span>
           </div>
           <!-- Respiración (Estimada) -->
           <div class="metric-box">
@@ -235,6 +280,11 @@
           </div>
         </div>
 
+        <!-- Mapa de la Ruta Realizada -->
+        <div class="section-card" style="padding: 0; overflow: hidden; height: 200px; margin-bottom: 20px; border: 1px solid var(--color-border);">
+          <div id="detail-map" style="height: 100%; width: 100%;"></div>
+        </div>
+
         <!-- Perfil del Gráfico de Línea -->
         <div class="section-card">
           <h3 class="card-title">Perfil de Rodada (FC vs Velocidad)</h3>
@@ -274,6 +324,17 @@
             <div class="form-row">
               <label for="set-weight">Peso (kg)</label>
               <input type="number" id="set-weight" name="weight" min="1" max="250" value="70" required>
+            </div>
+            <div class="form-row">
+              <label for="set-bike-weight">Peso de la Bici (kg)</label>
+              <input type="number" id="set-bike-weight" name="bikeWeight" min="1" max="100" value="10" required>
+            </div>
+            <div class="form-row-toggle">
+              <span>Pausa Automática Inteligente</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="set-autopause" checked>
+                <span class="slider round"></span>
+              </label>
             </div>
           </div>
 
@@ -333,6 +394,10 @@
             <div id="auto-zones-preview" class="auto-zones-preview">
               <!-- Se listarán las zonas calculadas dinámicamente -->
             </div>
+
+            <div class="settings-note" style="border-left: 3px solid var(--color-accent); padding-left: 8px; margin-top: 15px; font-size: 11px;">
+              <strong>Nota para iPhone:</strong> Las vibraciones de la vía pueden activar la ventana "Deshacer" en iOS. Te sugerimos desactivarla en: <em>Ajustes > Accesibilidad > Tocar > Agitar para Deshacer</em>.
+            </div>
           </div>
 
           <button type="submit" class="submit-btn">Guardar Cambios</button>
@@ -340,6 +405,28 @@
       </main>
     </section>
 
+  </div>
+
+  <!-- Diálogo de Recuperación de Sesión (Modal) -->
+  <div id="session-recovery-modal" class="modal-overlay hide">
+    <div class="modal-content">
+      <h3 style="font-family: var(--font-sport); font-weight: 800; color: var(--color-accent); margin-bottom: 12px; font-size: 18px;">🚲 Sesión Interrumpida</h3>
+      <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">Se detectó una rodada guardada en curso que no se finalizó (debido a bloqueo de pantalla o cierre del navegador).</p>
+      <div class="modal-stats-summary" style="display: flex; justify-content: space-around; background: var(--bg-primary); padding: 12px; border-radius: 12px; margin-bottom: 20px;">
+        <div style="display: flex; flex-direction: column; align-items: center;">
+          <span id="recovery-time" style="font-family: var(--font-sport); font-weight: 800; font-size: 16px; color: var(--text-main);">00:00:00</span>
+          <span style="font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Tiempo</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; border-left: 1px solid var(--color-border); padding-left: 20px;">
+          <span id="recovery-distance" style="font-family: var(--font-sport); font-weight: 800; font-size: 16px; color: var(--text-main);">0.00 km</span>
+          <span style="font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Distancia</span>
+        </div>
+      </div>
+      <div class="modal-actions" style="display: flex; gap: 12px;">
+        <button id="btn-recovery-discard" class="modal-btn secondary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--bg-primary); color: var(--text-main); font-weight: 700; cursor: pointer;">Descartar</button>
+        <button id="btn-recovery-resume" class="modal-btn primary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: none; background: var(--color-accent); color: white; font-weight: 700; cursor: pointer;">Reanudar</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="app.js"></script>

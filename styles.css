@@ -883,3 +883,71 @@ input:checked + .slider:before {
 .submit-btn:active {
   background-color: #0066cc;
 }
+
+/* --- ESTILOS DE RECUPERACIÓN DE SESIÓN (MODALES) --- */
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(30, 39, 46, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999; /* Por encima de todo, incluyendo el mapa */
+  padding: 20px;
+}
+
+.modal-content {
+  background-color: var(--bg-card);
+  border-radius: 24px;
+  width: 100%;
+  max-width: 320px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--color-border);
+  animation: modalScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes modalScaleUp {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Ajustes de Leaflet Map para Móviles */
+.leaflet-container {
+  font-family: var(--font-main) !important;
+}
+
+.leaflet-control-attribution {
+  font-size: 8px !important;
+}
+
+/* Colores de Cajas de Métricas Adicionales */
+.watts-metric .metric-value {
+  color: #A55EEA; /* Violeta/Energía */
+}
+
+/* Estilos de ClimbPro Micro-Segmentos */
+.climb-segment-bar {
+  flex: 1;
+  height: 100%;
+  margin-right: 1px;
+  transition: all 0.5s ease;
+}
+
+/* Auto-pausado UI styling */
+.live-badge.paused {
+  background-color: var(--color-danger-light);
+  color: var(--color-danger);
+  animation: none;
+}
+
+.live-badge.autopaused {
+  background-color: #FFF3CD;
+  color: #856404;
+  animation: pulse 1s infinite;
+}
+

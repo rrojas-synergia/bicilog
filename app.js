@@ -1,4 +1,4 @@
-// app.js - Orquestador Principal de la Aplicación BiciLog
+// app.js - Orquestador Principal de la Aplicación BiciLog con Telemetría Avanzada
 
 import { Storage } from './storage.js';
 import { BiciSensors } from './bluetooth.js';
@@ -13,19 +13,32 @@ const AppState = {
   rides: [],
   selectedRide: null,
 
+  // Mapas Leaflet
+  recMap: null,
+  recMarker: null,
+  recPathLine: null,
+  recTargetMarker: null,
+  detMap: null,
+  detPathLine: null,
+
   // Datos de la rodada actual
   activeRide: {
     isRecording: false,
     isPaused: false,
+    isAutoPaused: false, // Estado de auto-pausa
+    autoPauseTicks: 0,   // Contador para detectar inactividad
     timerInterval: null,
     elapsedSeconds: 0,
     distance: 0,
     speed: 0,
     ascent: 0,
+    grade: 0,
+    power: 0,
     hr: 0,
     cadence: 0,
     respiration: 0,
     temp: 22,
+    targetCoords: null, // Destino fijado en el mapa
     
     // Arrays para guardar muestras temporales de la rodada (cada 5s)
     samples: [],
@@ -65,6 +78,7 @@ const DOM = {
 
   // Grabación en vivo
   gpsAccuracy: document.getElementById('gps-accuracy-badge'),
+  liveStatusBadge: document.getElementById('live-status-badge'),
   btnConnectHr: document.getElementById('btn-connect-hr'),
   btnConnectCsc: document.getElementById('btn-connect-csc'),
   sensorPillHr: document.getElementById('sensor-pill-hr'),
@@ -76,12 +90,26 @@ const DOM = {
   liveHrZone: document.getElementById('live-hr-zone'),
   liveCadence: document.getElementById('live-cadence'),
   liveAscent: document.getElementById('live-ascent'),
+  liveWatts: document.getElementById('live-watts'),
+  liveGrade: document.getElementById('live-grade'),
   liveRespiration: document.getElementById('live-respiration'),
   liveTemp: document.getElementById('live-temp'),
   chkSimulate: document.getElementById('chk-simulate-data'),
   btnPauseRide: document.getElementById('btn-pause-ride'),
   btnResumeRide: document.getElementById('btn-resume-ride'),
   btnStopRide: document.getElementById('btn-stop-ride'),
+
+  // Map controls
+  mapTargetStatus: document.getElementById('map-target-status'),
+  mapTargetDistance: document.getElementById('map-target-distance'),
+  btnClearTarget: document.getElementById('btn-clear-target'),
+
+  // ClimbPro Widget
+  climbproWidget: document.getElementById('climbpro-widget'),
+  climbScoreBadge: document.getElementById('climb-score-badge'),
+  climbDistLeft: document.getElementById('climb-dist-left'),
+  climbAvgGrade: document.getElementById('climb-avg-grade'),
+  climbProfileBars: document.getElementById('climb-profile-bars'),
 
   // Detalle
   detailTitle: document.getElementById('detail-title'),
@@ -103,10 +131,19 @@ const DOM = {
   settingsForm: document.getElementById('settings-form'),
   setAge: document.getElementById('set-age'),
   setWeight: document.getElementById('set-weight'),
+  setBikeWeight: document.getElementById('set-bike-weight'),
+  setAutopause: document.getElementById('set-autopause'),
   setUseAuto: document.getElementById('set-use-auto'),
   manualZonesContainer: document.getElementById('manual-zones-container'),
   autoZonesPreview: document.getElementById('auto-zones-preview'),
-  btnSettingsBack: document.getElementById('btn-settings-back')
+  btnSettingsBack: document.getElementById('btn-settings-back'),
+
+  // Recuperación de sesión (Modal)
+  sessionRecoveryModal: document.getElementById('session-recovery-modal'),
+  recoveryTime: document.getElementById('recovery-time'),
+  recoveryDistance: document.getElementById('recovery-distance'),
+  btnRecoveryDiscard: document.getElementById('btn-recovery-discard'),
+  btnRecoveryResume: document.getElementById('btn-recovery-resume')
 };
 
 // --- NAVEGACIÓN SPA ---
@@ -221,6 +258,7 @@ function openRideDetail(ride) {
   setTimeout(() => {
     BiciCharts.renderHRZones('detail-hr-zones-chart', ride.zoneTimes, ride.duration);
     BiciCharts.renderRideProfile('detail-ride-profile-chart', ride.samples);
+    initDetailMap(ride);
   }, 100);
 }
 
@@ -229,6 +267,8 @@ function loadSettingsScreen() {
   const settings = Storage.getSettings();
   DOM.setAge.value = settings.age;
   DOM.setWeight.value = settings.weight;
+  DOM.setBikeWeight.value = settings.bikeWeight || 10;
+  DOM.setAutopause.checked = settings.autoPause;
   DOM.setUseAuto.checked = settings.useAutoZones;
 
   if (settings.useAutoZones) {
@@ -266,21 +306,174 @@ function updateAutoZonesPreview() {
   `;
 }
 
+// --- INTEGRACIÓN DE MAPAS LEAFLET ---
+
+// Inicializar el mapa en vivo de grabación
+function initRecordingMap() {
+  if (AppState.recMap) {
+    AppState.recMap.remove();
+    AppState.recMap = null;
+  }
+
+  // Coordenadas iniciales por defecto (fijadas si no hay GPS aún)
+  const defaultCoords = [4.6097, -74.0817]; // Bogotá por defecto o cualquier centro
+  
+  AppState.recMap = L.map('recording-map', {
+    zoomControl: false,
+    doubleClickZoom: false
+  }).setView(defaultCoords, 16);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OSM'
+  }).addTo(AppState.recMap);
+
+  // Inicializar indicador de ciclista (Icono azul clásico)
+  const bikeIcon = L.divIcon({
+    className: 'custom-bike-marker',
+    html: `<div style="background-color: var(--color-accent); width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>`,
+    iconSize: [14, 14]
+  });
+  
+  AppState.recMarker = L.marker(defaultCoords, { icon: bikeIcon }).addTo(AppState.recMap);
+
+  // Línea de trayectoria
+  AppState.recPathLine = L.polyline([], {
+    color: 'var(--color-accent)',
+    weight: 4.5,
+    opacity: 0.85
+  }).addTo(AppState.recMap);
+
+  // Evento de clic en el mapa para marcar Destino
+  AppState.recMap.on('click', (e) => {
+    setTargetCoords(e.latlng.lat, e.latlng.lng);
+  });
+}
+
+// Fijar coordenadas de destino en la rodada
+function setTargetCoords(lat, lng) {
+  AppState.activeRide.targetCoords = { lat, lng };
+
+  // Crear o mover el marcador rojo de destino
+  if (AppState.recTargetMarker) {
+    AppState.recTargetMarker.setLatLng([lat, lng]);
+  } else {
+    const targetIcon = L.divIcon({
+      className: 'custom-target-marker',
+      html: `<div style="background-color: var(--color-danger); width: 14px; height: 14px; transform: rotate(45deg); border: 2.5px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>`,
+      iconSize: [14, 14]
+    });
+    AppState.recTargetMarker = L.marker([lat, lng], { icon: targetIcon }).addTo(AppState.recMap);
+  }
+
+  DOM.mapTargetStatus.style.display = 'block';
+  DOM.mapTargetDistance.style.display = 'block';
+  DOM.btnClearTarget.style.display = 'block';
+
+  updateTargetDistance();
+}
+
+// Quitar coordenadas de destino
+function clearTargetCoords() {
+  AppState.activeRide.targetCoords = null;
+  if (AppState.recTargetMarker) {
+    AppState.recTargetMarker.remove();
+    AppState.recTargetMarker = null;
+  }
+  DOM.mapTargetStatus.style.display = 'none';
+  DOM.mapTargetDistance.style.display = 'none';
+  DOM.btnClearTarget.style.display = 'none';
+}
+
+// Calcular distancia restante al destino fijado
+function updateTargetDistance() {
+  if (!AppState.activeRide.targetCoords || !AppState.recMarker) return;
+
+  const currentLatLng = AppState.recMarker.getLatLng();
+  const target = AppState.activeRide.targetCoords;
+
+  // Calcular Haversine
+  const R = 6371; // Radio de la Tierra en km
+  const dLat = (target.lat - currentLatLng.lat) * Math.PI / 180;
+  const dLon = (target.lng - currentLatLng.lng) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(currentLatLng.lat * Math.PI / 180) * Math.cos(target.lat * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const dist = R * c; // en km
+
+  DOM.mapTargetDistance.textContent = `Quedan: ${dist.toFixed(2)} km`;
+}
+
+// Inicializar y graficar el mapa del detalle al finalizar
+function initDetailMap(ride) {
+  if (AppState.detMap) {
+    AppState.detMap.remove();
+    AppState.detMap = null;
+  }
+
+  // Filtrar muestras que tengan coordenadas válidas
+  const coords = ride.samples
+    .filter(s => s.lat !== undefined && s.lon !== undefined)
+    .map(s => [s.lat, s.lon]);
+
+  if (coords.length === 0) {
+    document.getElementById('detail-map').innerHTML = `<div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px;">No hay datos de mapas grabados en esta rodada.</div>`;
+    return;
+  }
+
+  AppState.detMap = L.map('detail-map', { zoomControl: false }).setView(coords[0], 15);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OSM'
+  }).addTo(AppState.detMap);
+
+  // Dibujar línea de trayectoria
+  AppState.detPathLine = L.polyline(coords, {
+    color: 'var(--color-danger)',
+    weight: 5,
+    opacity: 0.9
+  }).addTo(AppState.detMap);
+
+  // Marcador de inicio (Verde) y final (Rojo)
+  const startIcon = L.divIcon({
+    html: `<div style="background-color: var(--color-success); width: 12px; height: 12px; border-radius:50%; border:2px solid white; box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>`,
+    iconSize: [12, 12]
+  });
+  const endIcon = L.divIcon({
+    html: `<div style="background-color: var(--color-danger); width: 12px; height: 12px; border-radius:50%; border:2px solid white; box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>`,
+    iconSize: [12, 12]
+  });
+
+  L.marker(coords[0], { icon: startIcon }).addTo(AppState.detMap);
+  L.marker(coords[coords.length - 1], { icon: endIcon }).addTo(AppState.detMap);
+
+  // Ajustar la cámara para que encuadre toda la ruta
+  AppState.detMap.fitBounds(AppState.detPathLine.getBounds(), { padding: [20, 20] });
+}
+
 // --- LÓGICA DE GRABACIÓN ---
 
 function startWorkout() {
   AppState.activeRide = {
     isRecording: true,
     isPaused: false,
+    isAutoPaused: false,
+    autoPauseTicks: 0,
     timerInterval: null,
     elapsedSeconds: 0,
     distance: 0,
     speed: 0,
     ascent: 0,
+    grade: 0,
+    power: 0,
     hr: 0,
     cadence: 0,
     respiration: 0,
     temp: 22,
+    targetCoords: null,
     samples: [],
     sampleInterval: null,
     zoneTimes: { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 }
@@ -294,6 +487,8 @@ function startWorkout() {
   DOM.liveHrZone.className = 'hr-zone-tag hide';
   DOM.liveCadence.textContent = '--';
   DOM.liveAscent.textContent = '0';
+  DOM.liveWatts.textContent = '--';
+  DOM.liveGrade.textContent = '0%';
   DOM.liveRespiration.textContent = '--';
   DOM.liveTemp.textContent = '22';
 
@@ -301,11 +496,43 @@ function startWorkout() {
   DOM.btnPauseRide.classList.remove('hide');
   DOM.btnResumeRide.classList.add('hide');
 
+  // Limpiar el widget ClimbPro
+  DOM.climbproWidget.classList.add('hide');
+  DOM.climbProfileBars.innerHTML = '';
+
+  clearTargetCoords();
   navigateTo('recording');
+
+  // Inicializar mapa de grabación Leaflet
+  initRecordingMap();
 
   // 1. Iniciar Cronómetro
   AppState.activeRide.timerInterval = setInterval(() => {
-    if (!AppState.activeRide.isPaused) {
+    // Lógica de Auto-Pausa:
+    // Si la autopausa está activa en ajustes, y la velocidad es < 2.0 km/h
+    if (AppState.settings.autoPause) {
+      if (AppState.activeRide.speed < 2.0) {
+        AppState.activeRide.autoPauseTicks++;
+        if (AppState.activeRide.autoPauseTicks >= 6 && !AppState.activeRide.isAutoPaused) {
+          AppState.activeRide.isAutoPaused = true;
+          DOM.liveStatusBadge.textContent = 'AUTO-PAUSA';
+          DOM.liveStatusBadge.className = 'status-indicator live-badge autopaused';
+          console.log("[BiciLog] Actividad auto-pausada por falta de movimiento.");
+        }
+      } else {
+        AppState.activeRide.autoPauseTicks = 0;
+        if (AppState.activeRide.isAutoPaused) {
+          AppState.activeRide.isAutoPaused = false;
+          DOM.liveStatusBadge.textContent = 'EN VIVO';
+          DOM.liveStatusBadge.className = 'status-indicator live-badge';
+          console.log("[BiciLog] Actividad reanudada automáticamente.");
+        }
+      }
+    }
+
+    const isRunning = !AppState.activeRide.isPaused && !AppState.activeRide.isAutoPaused;
+
+    if (isRunning) {
       AppState.activeRide.elapsedSeconds++;
       DOM.liveTimer.textContent = BiciCharts.formatDuration(AppState.activeRide.elapsedSeconds);
       
@@ -316,17 +543,34 @@ function startWorkout() {
           AppState.activeRide.zoneTimes[`z${zoneNum}`]++;
         }
       }
+
+      // GUARDADO EN CALIENTE (SESIÓN ACTIVA) para recuperar por cortes/cierre
+      Storage.saveActiveSession({
+        elapsedSeconds: AppState.activeRide.elapsedSeconds,
+        distance: AppState.activeRide.distance,
+        ascent: AppState.activeRide.ascent,
+        hr: AppState.activeRide.hr,
+        cadence: AppState.activeRide.cadence,
+        respiration: AppState.activeRide.respiration,
+        temp: AppState.activeRide.temp,
+        samples: AppState.activeRide.samples,
+        zoneTimes: AppState.activeRide.zoneTimes,
+        simulationActive: AppState.simulation.isActive,
+        targetCoords: AppState.activeRide.targetCoords
+      });
     }
   }, 1000);
 
   // 2. Iniciar Toma de Muestras (Cada 5s para el gráfico final)
   AppState.activeRide.sampleInterval = setInterval(() => {
-    if (!AppState.activeRide.isPaused) {
+    if (!AppState.activeRide.isPaused && !AppState.activeRide.isAutoPaused) {
       AppState.activeRide.samples.push({
         time: AppState.activeRide.elapsedSeconds,
         hr: AppState.activeRide.hr,
         speed: AppState.activeRide.speed,
-        cadence: AppState.activeRide.cadence
+        cadence: AppState.activeRide.cadence,
+        lat: AppState.activeRide.lat,
+        lon: AppState.activeRide.lon
       });
     }
   }, 5000);
@@ -334,22 +578,43 @@ function startWorkout() {
   // 3. Iniciar GPS si el simulador no está encendido
   if (!AppState.simulation.isActive) {
     BiciGPS.startTracking(
+      AppState.settings,
       (gpsData) => {
-        // Callback al actualizar coordenadas
+        // Callback de datos filtrados desde el Web Worker
+        if (AppState.activeRide.isAutoPaused) return; // Ignorar si está auto-pausada
+
         AppState.activeRide.speed = gpsData.speed;
         AppState.activeRide.distance = gpsData.distance;
         AppState.activeRide.ascent = gpsData.ascent;
+        AppState.activeRide.grade = gpsData.grade;
+        AppState.activeRide.power = gpsData.power;
+        AppState.activeRide.lat = gpsData.latitude;
+        AppState.activeRide.lon = gpsData.longitude;
         
         DOM.liveSpeed.textContent = gpsData.speed.toFixed(1);
         DOM.liveDistance.textContent = gpsData.distance.toFixed(2);
         DOM.liveAscent.textContent = Math.round(gpsData.ascent);
-        DOM.gpsAccuracy.textContent = `GPS: ±${Math.round(gpsData.accuracy)}m`;
+        DOM.liveGrade.textContent = Math.round(gpsData.grade) + '%';
+        DOM.liveWatts.textContent = Math.round(gpsData.power);
         
-        // Simular temperatura variable basada en la ubicación inicial y altura
+        // Simular temperatura basada en altura
         const baseTemp = 22;
-        const tempShift = -((gpsData.ascent / 100) * 0.65); // Baja 0.65°C por cada 100m de subida
+        const tempShift = -((gpsData.ascent / 100) * 0.65);
         AppState.activeRide.temp = Math.round((baseTemp + tempShift) * 10) / 10;
         DOM.liveTemp.textContent = AppState.activeRide.temp;
+
+        // Actualizar el mapa Leaflet en vivo
+        if (AppState.recMap && gpsData.latitude && gpsData.longitude) {
+          const newPos = [gpsData.latitude, gpsData.longitude];
+          AppState.recMarker.setLatLng(newPos);
+          AppState.recPathLine.addLatLng(newPos);
+          AppState.recMap.panTo(newPos);
+
+          updateTargetDistance(); // recalcular distancia al destino si existe
+        }
+
+        // Renderizar ClimbPro si hay subida activa
+        updateClimbProUI(gpsData.climbInfo);
       },
       (error) => {
         DOM.gpsAccuracy.textContent = "GPS: Error";
@@ -357,6 +622,27 @@ function startWorkout() {
     );
   } else {
     startDemoSimulation();
+  }
+}
+
+// Actualizar el Widget de ClimbPro en vivo
+function updateClimbProUI(climbInfo) {
+  if (climbInfo && climbInfo.active) {
+    DOM.climbproWidget.classList.remove('hide');
+    DOM.climbDistLeft.textContent = Math.round(climbInfo.distance);
+    DOM.climbAvgGrade.textContent = climbInfo.avgGrade.toFixed(1);
+    DOM.climbScoreBadge.textContent = `Score: ${Math.round(climbInfo.score)}`;
+
+    // Renderizar las barras de color de inclinación
+    DOM.climbProfileBars.innerHTML = '';
+    climbInfo.segments.forEach(seg => {
+      const bar = document.createElement('div');
+      bar.className = 'climb-segment-bar';
+      bar.style.backgroundColor = seg.color;
+      DOM.climbProfileBars.appendChild(bar);
+    });
+  } else {
+    DOM.climbproWidget.classList.add('hide');
   }
 }
 
@@ -378,22 +664,40 @@ function resumeWorkout() {
   DOM.btnResumeRide.classList.add('hide');
 
   if (!AppState.simulation.isActive) {
-    BiciGPS.startTracking((gpsData) => {
-      AppState.activeRide.speed = gpsData.speed;
-      AppState.activeRide.distance = gpsData.distance;
-      AppState.activeRide.ascent = gpsData.ascent;
-      
-      DOM.liveSpeed.textContent = gpsData.speed.toFixed(1);
-      DOM.liveDistance.textContent = gpsData.distance.toFixed(2);
-      DOM.liveAscent.textContent = Math.round(gpsData.ascent);
-      DOM.gpsAccuracy.textContent = `GPS: ±${Math.round(gpsData.accuracy)}m`;
-    });
+    BiciGPS.startTracking(
+      AppState.settings,
+      (gpsData) => {
+        if (AppState.activeRide.isAutoPaused) return;
+
+        AppState.activeRide.speed = gpsData.speed;
+        AppState.activeRide.distance = gpsData.distance;
+        AppState.activeRide.ascent = gpsData.ascent;
+        AppState.activeRide.grade = gpsData.grade;
+        AppState.activeRide.power = gpsData.power;
+        AppState.activeRide.lat = gpsData.latitude;
+        AppState.activeRide.lon = gpsData.longitude;
+        
+        DOM.liveSpeed.textContent = gpsData.speed.toFixed(1);
+        DOM.liveDistance.textContent = gpsData.distance.toFixed(2);
+        DOM.liveAscent.textContent = Math.round(gpsData.ascent);
+        DOM.liveGrade.textContent = Math.round(gpsData.grade) + '%';
+        DOM.liveWatts.textContent = Math.round(gpsData.power);
+
+        if (AppState.recMap && gpsData.latitude && gpsData.longitude) {
+          const newPos = [gpsData.latitude, gpsData.longitude];
+          AppState.recMarker.setLatLng(newPos);
+          AppState.recPathLine.addLatLng(newPos);
+          AppState.recMap.panTo(newPos);
+          updateTargetDistance();
+        }
+        updateClimbProUI(gpsData.climbInfo);
+      }
+    );
   }
 }
 
 // Finalizar y Guardar
 function stopWorkout() {
-  // Limpiar timers
   clearInterval(AppState.activeRide.timerInterval);
   clearInterval(AppState.activeRide.sampleInterval);
   
@@ -405,9 +709,14 @@ function stopWorkout() {
     resetPillsUI();
   }
 
+  // Quitar mapas
+  if (AppState.recMap) {
+    AppState.recMap.remove();
+    AppState.recMap = null;
+  }
+
   const rideData = AppState.activeRide;
   
-  // Si no hay muestras (rodada muy corta), meter una inicial y final
   if (rideData.samples.length === 0) {
     rideData.samples.push({ time: 0, hr: rideData.hr || 70, speed: rideData.speed || 0, cadence: rideData.cadence || 0 });
     rideData.samples.push({ time: rideData.elapsedSeconds, hr: rideData.hr || 70, speed: rideData.speed || 0, cadence: rideData.cadence || 0 });
@@ -422,7 +731,7 @@ function stopWorkout() {
   const avgSpeed = speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0;
   const avgCadence = cadences.length > 0 ? cadences.reduce((a, b) => a + b, 0) / cadences.length : 0;
 
-  // Estimación fisiológica de la respiración promedio basada en FC Promedio
+  // Estimación de la respiración promedio basada en FC Promedio
   const avgRespiration = avgHr > 0 ? Math.round(12 + (avgHr - 60) / 3.5) : 0;
 
   // Titular dinámico basado en hora
@@ -446,10 +755,10 @@ function stopWorkout() {
     zoneTimes: rideData.zoneTimes
   };
 
-  // Guardar en LocalStorage
+  // Guardar en LocalStorage (Limpia sesión activa internamente)
   Storage.saveRide(newRide);
 
-  // Redirigir a vista de detalle
+  // Redirigir a detalle
   openRideDetail(newRide);
 }
 
@@ -468,7 +777,7 @@ function resetPillsUI() {
 
 async function toggleHRConnection() {
   if (BiciSensors.isHrConnected) {
-    BiciSensors.disconnectAll(); // Desconecta
+    BiciSensors.disconnectAll();
     resetPillsUI();
   } else {
     DOM.btnConnectHr.textContent = 'Buscando...';
@@ -477,7 +786,6 @@ async function toggleHRConnection() {
     try {
       await BiciSensors.connectHeartRate(
         (hrValue) => {
-          // Callback de datos
           AppState.activeRide.hr = hrValue;
           DOM.liveHr.textContent = hrValue;
 
@@ -492,8 +800,7 @@ async function toggleHRConnection() {
             DOM.liveHrZone.classList.add('hide');
           }
 
-          // Estimación fisiológica de Frecuencia Respiratoria instantánea
-          // Formula: 12 + (HR - 60) / 3.5. Al subir la FC sube la frecuencia respiratoria
+          // Estimación respiratoria instantánea
           const respRate = Math.round(12 + (hrValue - 60) / 3.5);
           AppState.activeRide.respiration = respRate;
           DOM.liveRespiration.textContent = respRate;
@@ -508,7 +815,7 @@ async function toggleHRConnection() {
       DOM.sensorPillHr.querySelector('.sensor-status-text').textContent = 'FC: Conectado';
       DOM.btnConnectHr.textContent = 'Desconectar';
     } catch (err) {
-      alert("No se pudo conectar el sensor de Frecuencia Cardíaca. Asegúrate de tener Bluetooth activado y dar permisos.");
+      alert("No se pudo conectar el sensor de Frecuencia Cardíaca. Recuerda usar el navegador Bluefy en iPhone.");
       resetPillsUI();
     }
   }
@@ -538,7 +845,7 @@ async function toggleCSCConnection() {
       DOM.sensorPillCsc.querySelector('.sensor-status-text').textContent = 'Cad: Conectado';
       DOM.btnConnectCsc.textContent = 'Desconectar';
     } catch (err) {
-      alert("No se pudo conectar el sensor de Cadencia. Asegúrate de tener Bluetooth activado.");
+      alert("No se pudo conectar el sensor de Cadencia.");
       resetPillsUI();
     }
   }
@@ -561,37 +868,63 @@ function startDemoSimulation() {
   DOM.sensorPillCsc.querySelector('.sensor-status-text').textContent = 'Cad: Simulado';
   DOM.btnConnectCsc.textContent = 'Desconectar';
 
-  AppState.simulation.intervalId = setInterval(() => {
-    if (AppState.activeRide.isPaused) return;
+  // Ruta simulada alrededor de Bogotá / montañas
+  let simLat = 4.6097;
+  let simLon = -74.0817;
 
-    // 1. Simular Fluctuación de Velocidad (20 - 35 km/h)
-    const speedDelta = (Math.random() - 0.5) * 1.5;
-    AppState.simulation.simSpeed = Math.min(Math.max(AppState.simulation.simSpeed + speedDelta, 18), 38);
+  AppState.simulation.intervalId = setInterval(() => {
+    if (AppState.activeRide.isPaused || AppState.activeRide.isAutoPaused) return;
+
+    // 1. Simular velocidad con altibajos
+    const speedDelta = (Math.random() - 0.5) * 1.8;
+    AppState.simulation.simSpeed = Math.min(Math.max(AppState.simulation.simSpeed + speedDelta, 12), 42);
     AppState.activeRide.speed = AppState.simulation.simSpeed;
     DOM.liveSpeed.textContent = AppState.activeRide.speed.toFixed(1);
 
-    // 2. Simular Distancia Acumulada (aumenta según velocidad por segundo)
-    // Velocidad en km/h dividida por 3600 da kilómetros por segundo
+    // 2. Simular Distancia Acumulada
     const distancePerSecond = AppState.activeRide.speed / 3600;
     AppState.activeRide.distance += distancePerSecond;
     DOM.liveDistance.textContent = AppState.activeRide.distance.toFixed(2);
 
-    // 3. Simular Ascenso (sube 1 metro cada ~10 segundos con pendiente suave)
-    if (Math.random() > 0.85) {
-      AppState.activeRide.ascent += Math.round(Math.random() * 2);
+    // Mover coordenadas falsas
+    simLat += 0.00008 * (AppState.activeRide.speed / 20);
+    simLon += 0.00005 * Math.sin(AppState.activeRide.elapsedSeconds / 10);
+    AppState.activeRide.lat = simLat;
+    AppState.activeRide.lon = simLon;
+
+    // Actualizar mapa Leaflet simulado
+    if (AppState.recMap) {
+      const newPos = [simLat, simLon];
+      AppState.recMarker.setLatLng(newPos);
+      AppState.recPathLine.addLatLng(newPos);
+      AppState.recMap.panTo(newPos);
+      updateTargetDistance();
+    }
+
+    // 3. Simular Pendiente (%) variable
+    // Si la velocidad baja, asumimos que está subiendo
+    let grade = 0;
+    if (AppState.activeRide.speed < 18) {
+      grade = (18 - AppState.activeRide.speed) * 0.8; // pendiente hasta 12%
+    } else {
+      grade = (18 - AppState.activeRide.speed) * 0.3; // pendiente negativa o llano
+    }
+    AppState.activeRide.grade = grade;
+    DOM.liveGrade.textContent = Math.round(grade) + '%';
+
+    // 4. Simular Ascenso
+    if (grade > 0) {
+      AppState.activeRide.ascent += (grade / 100) * (distancePerSecond * 1000);
       DOM.liveAscent.textContent = Math.round(AppState.activeRide.ascent);
     }
 
-    // 4. Simular Frecuencia Cardíaca (fluctúa entre 110 y 165 según esfuerzo)
-    // Si la velocidad es alta, la FC tiende a subir
-    const speedRatio = (AppState.activeRide.speed - 18) / 20; // 0 a 1
-    const targetHR = 110 + speedRatio * 50;
-    const hrDelta = (targetHR - AppState.simulation.simHr) * 0.1 + (Math.random() - 0.5) * 4;
+    // 5. Simular Frecuencia Cardíaca
+    const targetHR = 110 + (grade > 0 ? grade * 7 : 0) + (AppState.activeRide.speed > 25 ? 15 : 0);
+    const hrDelta = (targetHR - AppState.simulation.simHr) * 0.08 + (Math.random() - 0.5) * 3;
     AppState.simulation.simHr = Math.round(Math.min(Math.max(AppState.simulation.simHr + hrDelta, 90), 185));
     AppState.activeRide.hr = AppState.simulation.simHr;
     DOM.liveHr.textContent = AppState.activeRide.hr;
 
-    // Actualizar zonas en vivo para simulador
     const zone = Storage.getZoneForHR(AppState.activeRide.hr, AppState.hrZones);
     if (zone > 0) {
       DOM.liveHrZone.textContent = `Z${zone}`;
@@ -600,19 +933,51 @@ function startDemoSimulation() {
       DOM.liveHrZone.classList.remove('hide');
     }
 
-    // 5. Simular Cadencia (fluctúa entre 75 y 95 RPM)
-    const cadDelta = (Math.random() - 0.5) * 3;
+    // 6. Simular Watts basado en modelo mecánico
+    const riderM = AppState.settings.weight || 70;
+    const bikeM = AppState.settings.bikeWeight || 10;
+    const totalMass = riderM + bikeM;
+    const speedMs = AppState.activeRide.speed / 3.6;
+    const angleRad = Math.atan(grade / 100);
+
+    const fGravity = totalMass * 9.81 * Math.sin(angleRad);
+    const fRolling = totalMass * 9.81 * Math.cos(angleRad) * 0.004;
+    const fDrag = 0.5 * 0.32 * 1.225 * Math.pow(speedMs, 2);
+    let power = (fGravity + fRolling + fDrag) * speedMs;
+    if (power < 0) power = 0;
+    AppState.activeRide.power = Math.round(power / 0.95);
+    DOM.liveWatts.textContent = AppState.activeRide.power;
+
+    // 7. Simular Cadencia
+    const cadDelta = (Math.random() - 0.5) * 4;
     AppState.simulation.simCad = Math.round(Math.min(Math.max(AppState.simulation.simCad + cadDelta, 60), 110));
     AppState.activeRide.cadence = AppState.simulation.simCad;
     DOM.liveCadence.textContent = AppState.activeRide.cadence;
 
-    // 6. Simular Respiración
+    // 8. Simular Respiración
     const respRate = Math.round(12 + (AppState.activeRide.hr - 60) / 3.5);
     AppState.activeRide.respiration = respRate;
     DOM.liveRespiration.textContent = respRate;
 
-    // 7. Simular Temperatura
+    // 9. Temperatura
     DOM.liveTemp.textContent = AppState.activeRide.temp;
+
+    // Simular widgets de ClimbPro periódicos
+    const isClimbSim = AppState.activeRide.elapsedSeconds % 100 > 30; // subida simulada cada 100s, por 70s
+    if (isClimbSim) {
+      const mockClimb = {
+        active: true,
+        distance: Math.max(0, 1200 - (AppState.activeRide.elapsedSeconds % 100) * 10),
+        avgGrade: Math.max(3.2, grade),
+        score: 1800,
+        segments: [
+          { color: '#FECA57' }, { color: '#FF9F43' }, { color: '#FF6B6B' }, { color: '#FECA57' }
+        ]
+      };
+      updateClimbProUI(mockClimb);
+    } else {
+      updateClimbProUI(null);
+    }
 
   }, 1000);
 }
@@ -624,11 +989,203 @@ function stopDemoSimulation() {
   DOM.gpsAccuracy.textContent = "GPS: --";
 }
 
+// --- RECUPERACIÓN DE SESIÓN (RESTAURACIÓN) ---
+
+function resumeActiveSession(session) {
+  // Rehidratar AppState con datos de la sesión anterior
+  AppState.activeRide = {
+    isRecording: true,
+    isPaused: false,
+    isAutoPaused: false,
+    autoPauseTicks: 0,
+    timerInterval: null,
+    elapsedSeconds: session.elapsedSeconds,
+    distance: session.distance,
+    ascent: session.ascent,
+    grade: 0,
+    power: 0,
+    hr: session.hr,
+    cadence: session.cadence,
+    respiration: session.respiration,
+    temp: session.temp,
+    targetCoords: session.targetCoords,
+    samples: session.samples || [],
+    sampleInterval: null,
+    zoneTimes: session.zoneTimes
+  };
+
+  DOM.liveSpeed.textContent = '0.0';
+  DOM.liveDistance.textContent = AppState.activeRide.distance.toFixed(2);
+  DOM.liveTimer.textContent = BiciCharts.formatDuration(AppState.activeRide.elapsedSeconds);
+  DOM.liveHr.textContent = AppState.activeRide.hr || '--';
+  DOM.liveCadence.textContent = AppState.activeRide.cadence || '--';
+  DOM.liveAscent.textContent = Math.round(AppState.activeRide.ascent);
+  DOM.liveWatts.textContent = '--';
+  DOM.liveGrade.textContent = '0%';
+  DOM.liveRespiration.textContent = AppState.activeRide.respiration || '--';
+  DOM.liveTemp.textContent = AppState.activeRide.temp;
+
+  // Restaurar UI de botones
+  DOM.btnPauseRide.classList.remove('hide');
+  DOM.btnResumeRide.classList.add('hide');
+
+  navigateTo('recording');
+  initRecordingMap();
+
+  // Redibujar la línea de mapa existente
+  if (session.samples && session.samples.length > 0) {
+    const coords = session.samples
+      .filter(s => s.lat !== undefined && s.lon !== undefined)
+      .map(s => [s.lat, s.lon]);
+    
+    if (coords.length > 0) {
+      AppState.recPathLine.setLatLngs(coords);
+      const lastCoord = coords[coords.length - 1];
+      AppState.recMarker.setLatLng(lastCoord);
+      AppState.recMap.setView(lastCoord, 16);
+      AppState.activeRide.lat = lastCoord[0];
+      AppState.activeRide.lon = lastCoord[1];
+    }
+  }
+
+  // Restaurar destino si existía
+  if (session.targetCoords) {
+    setTargetCoords(session.targetCoords.lat, session.targetCoords.lng);
+  }
+
+  // Restaurar simulación o rastreo GPS real
+  if (session.simulationActive) {
+    startDemoSimulation();
+  } else {
+    // Rastreador real
+    BiciGPS.startTracking(
+      AppState.settings,
+      (gpsData) => {
+        if (AppState.activeRide.isAutoPaused) return;
+
+        AppState.activeRide.speed = gpsData.speed;
+        AppState.activeRide.distance = gpsData.distance;
+        AppState.activeRide.ascent = gpsData.ascent;
+        AppState.activeRide.grade = gpsData.grade;
+        AppState.activeRide.power = gpsData.power;
+        AppState.activeRide.lat = gpsData.latitude;
+        AppState.activeRide.lon = gpsData.longitude;
+        
+        DOM.liveSpeed.textContent = gpsData.speed.toFixed(1);
+        DOM.liveDistance.textContent = gpsData.distance.toFixed(2);
+        DOM.liveAscent.textContent = Math.round(gpsData.ascent);
+        DOM.liveGrade.textContent = Math.round(gpsData.grade) + '%';
+        DOM.liveWatts.textContent = Math.round(gpsData.power);
+
+        if (AppState.recMap && gpsData.latitude && gpsData.longitude) {
+          const newPos = [gpsData.latitude, gpsData.longitude];
+          AppState.recMarker.setLatLng(newPos);
+          AppState.recPathLine.addLatLng(newPos);
+          AppState.recMap.panTo(newPos);
+          updateTargetDistance();
+        }
+        updateClimbProUI(gpsData.climbInfo);
+      }
+    );
+  }
+
+  // Iniciar intervalos de cronómetro nuevamente
+  AppState.activeRide.timerInterval = setInterval(() => {
+    if (AppState.settings.autoPause) {
+      if (AppState.activeRide.speed < 2.0) {
+        AppState.activeRide.autoPauseTicks++;
+        if (AppState.activeRide.autoPauseTicks >= 6 && !AppState.activeRide.isAutoPaused) {
+          AppState.activeRide.isAutoPaused = true;
+          DOM.liveStatusBadge.textContent = 'AUTO-PAUSA';
+          DOM.liveStatusBadge.className = 'status-indicator live-badge autopaused';
+        }
+      } else {
+        AppState.activeRide.autoPauseTicks = 0;
+        if (AppState.activeRide.isAutoPaused) {
+          AppState.activeRide.isAutoPaused = false;
+          DOM.liveStatusBadge.textContent = 'EN VIVO';
+          DOM.liveStatusBadge.className = 'status-indicator live-badge';
+        }
+      }
+    }
+
+    const isRunning = !AppState.activeRide.isPaused && !AppState.activeRide.isAutoPaused;
+
+    if (isRunning) {
+      AppState.activeRide.elapsedSeconds++;
+      DOM.liveTimer.textContent = BiciCharts.formatDuration(AppState.activeRide.elapsedSeconds);
+      
+      if (AppState.activeRide.hr > 0) {
+        const zoneNum = Storage.getZoneForHR(AppState.activeRide.hr, AppState.hrZones);
+        if (zoneNum > 0) {
+          AppState.activeRide.zoneTimes[`z${zoneNum}`]++;
+        }
+      }
+
+      // Guardar en caliente cada segundo
+      Storage.saveActiveSession({
+        elapsedSeconds: AppState.activeRide.elapsedSeconds,
+        distance: AppState.activeRide.distance,
+        ascent: AppState.activeRide.ascent,
+        hr: AppState.activeRide.hr,
+        cadence: AppState.activeRide.cadence,
+        respiration: AppState.activeRide.respiration,
+        temp: AppState.activeRide.temp,
+        samples: AppState.activeRide.samples,
+        zoneTimes: AppState.activeRide.zoneTimes,
+        simulationActive: AppState.simulation.isActive,
+        targetCoords: AppState.activeRide.targetCoords
+      });
+    }
+  }, 1000);
+
+  // Intervalo de muestras cada 5s
+  AppState.activeRide.sampleInterval = setInterval(() => {
+    if (!AppState.activeRide.isPaused && !AppState.activeRide.isAutoPaused) {
+      AppState.activeRide.samples.push({
+        time: AppState.activeRide.elapsedSeconds,
+        hr: AppState.activeRide.hr,
+        speed: AppState.activeRide.speed,
+        cadence: AppState.activeRide.cadence,
+        lat: AppState.activeRide.lat,
+        lon: AppState.activeRide.lon
+      });
+    }
+  }, 5000);
+}
+
 // --- INICIALIZADORES Y EVENTOS ---
 
 document.addEventListener('DOMContentLoaded', () => {
   // Cargar estado inicial
   loadDashboardData();
+
+  // --- COMPROBAR RECUPERACIÓN DE SESIÓN EN CALIENTE ---
+  const savedSession = Storage.getActiveSession();
+  if (savedSession && savedSession.elapsedSeconds > 5) {
+    // Mostrar modal de recuperación
+    DOM.recoveryTime.textContent = BiciCharts.formatDuration(savedSession.elapsedSeconds);
+    DOM.recoveryDistance.textContent = savedSession.distance.toFixed(2) + ' km';
+    DOM.sessionRecoveryModal.classList.remove('hide');
+
+    DOM.btnRecoveryDiscard.addEventListener('click', () => {
+      Storage.clearActiveSession();
+      DOM.sessionRecoveryModal.classList.add('hide');
+    });
+
+    DOM.btnRecoveryResume.addEventListener('click', () => {
+      DOM.sessionRecoveryModal.classList.add('hide');
+      resumeActiveSession(savedSession);
+    });
+  }
+
+  // Interceptar eventos "Undo" del sistema (Shake to Undo en Safari de iPhone)
+  window.addEventListener('beforeinput', (e) => {
+    if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') {
+      e.preventDefault();
+      console.log("[BiciLog] Shake-to-Undo bloqueado por seguridad.");
+    }
+  });
 
   // --- REGISTRO DE EVENTOS DE BOTONES ---
 
@@ -639,6 +1196,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Iniciar Rodada
   DOM.btnStartRide.addEventListener('click', () => {
+    // Quitar focos de inputs para prevenir alertas de Shake-to-Undo en iPhone
+    if (document.activeElement) {
+      document.activeElement.blur();
+    }
     startWorkout();
   });
 
@@ -656,15 +1217,31 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Controles de Rodada
-  DOM.btnPauseRide.addEventListener('click', pauseWorkout);
-  DOM.btnResumeRide.addEventListener('click', resumeWorkout);
-  DOM.btnStopRide.addEventListener('click', stopWorkout);
+  DOM.btnPauseRide.addEventListener('click', () => {
+    if (document.activeElement) document.activeElement.blur();
+    pauseWorkout();
+  });
+  
+  DOM.btnResumeRide.addEventListener('click', () => {
+    if (document.activeElement) document.activeElement.blur();
+    resumeWorkout();
+  });
+  
+  DOM.btnStopRide.addEventListener('click', () => {
+    if (document.activeElement) document.activeElement.blur();
+    stopWorkout();
+  });
+
+  // Limpiar destino fijado en el mapa
+  DOM.btnClearTarget.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearTargetCoords();
+  });
 
   // Selector del Simulador
   DOM.chkSimulate.addEventListener('change', (e) => {
     if (e.target.checked) {
       if (AppState.activeRide.isRecording) {
-        // Si ya está rodando, arrancar simulador de golpe
         BiciGPS.stopTracking();
         startDemoSimulation();
       } else {
@@ -673,15 +1250,35 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       if (AppState.activeRide.isRecording) {
         stopDemoSimulation();
-        // Volver a GPS real
-        BiciGPS.startTracking((gpsData) => {
-          AppState.activeRide.speed = gpsData.speed;
-          AppState.activeRide.distance = gpsData.distance;
-          AppState.activeRide.ascent = gpsData.ascent;
-          DOM.liveSpeed.textContent = gpsData.speed.toFixed(1);
-          DOM.liveDistance.textContent = gpsData.distance.toFixed(2);
-          DOM.liveAscent.textContent = Math.round(gpsData.ascent);
-        });
+        BiciGPS.startTracking(
+          AppState.settings,
+          (gpsData) => {
+            if (AppState.activeRide.isAutoPaused) return;
+
+            AppState.activeRide.speed = gpsData.speed;
+            AppState.activeRide.distance = gpsData.distance;
+            AppState.activeRide.ascent = gpsData.ascent;
+            AppState.activeRide.grade = gpsData.grade;
+            AppState.activeRide.power = gpsData.power;
+            AppState.activeRide.lat = gpsData.latitude;
+            AppState.activeRide.lon = gpsData.longitude;
+            
+            DOM.liveSpeed.textContent = gpsData.speed.toFixed(1);
+            DOM.liveDistance.textContent = gpsData.distance.toFixed(2);
+            DOM.liveAscent.textContent = Math.round(gpsData.ascent);
+            DOM.liveGrade.textContent = Math.round(gpsData.grade) + '%';
+            DOM.liveWatts.textContent = Math.round(gpsData.power);
+
+            if (AppState.recMap && gpsData.latitude && gpsData.longitude) {
+              const newPos = [gpsData.latitude, gpsData.longitude];
+              AppState.recMarker.setLatLng(newPos);
+              AppState.recPathLine.addLatLng(newPos);
+              AppState.recMap.panTo(newPos);
+              updateTargetDistance();
+            }
+            updateClimbProUI(gpsData.climbInfo);
+          }
+        );
       } else {
         AppState.simulation.isActive = false;
       }
@@ -706,7 +1303,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let manualZones = {};
 
     if (!useAuto) {
-      // Tomar valores de los inputs manuales
       const zones = ['z1', 'z2', 'z3', 'z4', 'z5'];
       for (const z of zones) {
         const minVal = parseInt(document.getElementById(`${z}-min`).value) || 0;
@@ -718,12 +1314,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const updatedSettings = {
       age: parseInt(DOM.setAge.value) || 30,
       weight: parseInt(DOM.setWeight.value) || 70,
+      bikeWeight: parseInt(DOM.setBikeWeight.value) || 10,
+      autoPause: DOM.setAutopause.checked,
       useAutoZones: useAuto,
       manualZones: useAuto ? AppState.settings.manualZones : manualZones
     };
 
     Storage.saveSettings(updatedSettings);
-    loadDashboardData(); // Recargar zonas de FC
+    loadDashboardData(); // Recargar zonas
     navigateTo('dashboard');
   });
 
@@ -737,7 +1335,6 @@ document.addEventListener('DOMContentLoaded', () => {
       DOM.manualZonesContainer.classList.remove('hide');
       DOM.autoZonesPreview.classList.add('hide');
       
-      // Llenar inputs manuales si no tenían valor
       const settings = Storage.getSettings();
       Object.keys(settings.manualZones).forEach(zone => {
         document.getElementById(`${zone}-min`).value = settings.manualZones[zone].min;
@@ -762,4 +1359,3 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.error('Error al registrar Service Worker:', err));
   });
 }
-

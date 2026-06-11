@@ -1,6 +1,6 @@
-// sw.js - Service Worker para Soporte Offline en BiciLog
+// sw.js - Service Worker para Soporte Offline en BiciLog con CDN Caching
 
-const CACHE_NAME = 'bicilog-v1';
+const CACHE_NAME = 'bicilog-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -9,15 +9,20 @@ const ASSETS_TO_CACHE = [
   './storage.js',
   './bluetooth.js',
   './gps.js',
+  './gps-worker.js', // Caché para el Web Worker
   './charts.js',
-  './manifest.json'
+  './manifest.json',
+  // Caching externo para Leaflet.js (Permite iniciar mapas offline)
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
 
 // Instalar el Service Worker y cachear recursos
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('Cache abierto, cargando assets...');
+      console.log('Cache abierto, cargando assets locales y externos...');
+      // Usar force fetch para asegurar almacenamiento de CDNs
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
@@ -39,7 +44,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Estrategia Cache-First (Offline) con caída en Red
+// Estrategia Cache-First con caídas en red
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -47,11 +52,16 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
       return fetch(event.request).then((networkResponse) => {
-        // Guardar nuevas solicitudes dinámicamente si es necesario
+        // Caching dinámico para recursos relacionados con mapas tiles si es viable
+        if (event.request.url.includes('tile.openstreetmap.org')) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
         return networkResponse;
       });
     }).catch(() => {
-      // Retorno en caso de error completo de red
       if (event.request.mode === 'navigate') {
         return caches.match('./index.html');
       }

@@ -1,13 +1,16 @@
-// storage.js - Persistencia Local (Offline-first) para BiciLog
+// storage.js - Persistencia Local y Recuperación de Sesión (Offline-first) para BiciLog
 
 const STORAGE_KEYS = {
   SETTINGS: 'bicilog_settings',
-  RIDES: 'bicilog_rides'
+  RIDES: 'bicilog_rides',
+  ACTIVE_SESSION: 'bicilog_active_session' // Nueva clave para recuperación de fallos
 };
 
 const DEFAULT_SETTINGS = {
   age: 30,
-  weight: 70, // kg
+  weight: 70,     // kg del ciclista
+  bikeWeight: 10,  // kg de la bicicleta
+  autoPause: true, // Auto-pausa por defecto
   useAutoZones: true,
   manualZones: {
     z1: { min: 90, max: 110 },
@@ -27,7 +30,12 @@ export const Storage = {
       return DEFAULT_SETTINGS;
     }
     try {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      // Garantizar que existan las nuevas propiedades agregadas en Fase 2
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed
+      };
     } catch (e) {
       console.error("Error al parsear ajustes:", e);
       return DEFAULT_SETTINGS;
@@ -70,7 +78,6 @@ export const Storage = {
     const data = localStorage.getItem(STORAGE_KEYS.RIDES);
     if (!data) return [];
     try {
-      // Ordenar por fecha descendente (más recientes primero)
       return JSON.parse(data).sort((a, b) => b.timestamp - a.timestamp);
     } catch (e) {
       console.error("Error al parsear rodadas:", e);
@@ -83,6 +90,7 @@ export const Storage = {
     const rides = this.getRides();
     rides.push(ride);
     localStorage.setItem(STORAGE_KEYS.RIDES, JSON.stringify(rides));
+    this.clearActiveSession(); // Limpiar sesión activa ya que se guardó
     return rides;
   },
 
@@ -92,5 +100,29 @@ export const Storage = {
     rides = rides.filter(ride => ride.timestamp !== timestamp);
     localStorage.setItem(STORAGE_KEYS.RIDES, JSON.stringify(rides));
     return rides;
+  },
+
+  // --- MÉTODOS DE RECUPERACIÓN DE SESIÓN EN VIVO ---
+
+  // Guardar sesión de rodada activa (se ejecuta en caliente cada segundo)
+  saveActiveSession(rideState) {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(rideState));
+  },
+
+  // Obtener sesión de rodada guardada si existe
+  getActiveSession() {
+    const data = localStorage.getItem(STORAGE_KEYS.ACTIVE_SESSION);
+    if (!data) return null;
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error("Error al parsear sesión activa:", e);
+      return null;
+    }
+  },
+
+  // Limpiar sesión de rodada activa
+  clearActiveSession() {
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION);
   }
 };
