@@ -951,3 +951,89 @@ input:checked + .slider:before {
   animation: pulse 1s infinite;
 }
 
+/* --- ESTILOS CRUD DE SENSORES Y DEVICE ALIASING --- */
+.sensor-crud-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 16px;
+  gap: 12px;
+  box-shadow: 0 2px 6px var(--color-shadow);
+}
+
+.sensor-crud-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.sensor-crud-icon {
+  font-size: 24px;
+}
+
+.sensor-crud-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sensor-crud-alias {
+  font-family: var(--font-sport);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.sensor-crud-original {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.sensor-crud-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Botones de acción táctiles de al menos 48x48px de área de toque */
+.sensor-action-btn-crud {
+  min-width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.sensor-action-btn-crud:active {
+  transform: scale(0.96);
+}
+
+.sensor-action-btn-crud.edit {
+  background-color: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.sensor-action-btn-crud.edit:active {
+  background-color: var(--color-accent);
+  color: white;
+}
+
+.sensor-action-btn-crud.delete {
+  background-color: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+.sensor-action-btn-crud.delete:active {
+  background-color: var(--color-danger);
+  color: white;
+}
+
+

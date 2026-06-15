@@ -314,6 +314,15 @@
 
       <main class="screen-content">
         <form id="settings-form" class="settings-form">
+          <!-- Hardware y Sensores -->
+          <div class="settings-group">
+            <h3 class="group-title">Hardware y Sensores</h3>
+            <p class="settings-note">Gestiona y personaliza los nombres de tus sensores de frecuencia cardíaca y cadencia.</p>
+            <button type="button" id="btn-goto-sensors" class="submit-btn" style="background-color: var(--color-accent-light); color: var(--color-accent); border: none; box-shadow: none; height: 46px; border-radius: 12px; margin-bottom: 0; width: 100%; font-weight: 700;">
+              ⚙️ Gestionar Sensores BLE
+            </button>
+          </div>
+
           <!-- Perfil del Ciclista -->
           <div class="settings-group">
             <h3 class="group-title">Perfil</h3>
@@ -405,6 +414,27 @@
       </main>
     </section>
 
+    <!-- PANTALLA 5: GESTIÓN DE SENSORES (CRUD & ALIAS) -->
+    <section id="screen-sensors" class="app-screen">
+      <header class="app-header">
+        <button id="btn-sensors-back" class="icon-button" aria-label="Volver">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <span class="header-title">Mis Sensores BLE</span>
+        <div style="width: 44px;"></div>
+      </header>
+
+      <main class="screen-content">
+        <div class="section-card">
+          <p class="settings-note" style="margin-top: 0; margin-bottom: 16px;">Aquí puedes renombrar tus sensores para verlos con nombres claros en tu pantalla de actividad, o desvincularlos si ya no los usas.</p>
+          <div id="sensors-crud-list" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Generado dinámicamente -->
+            <div class="empty-state">No tienes sensores emparejados.</div>
+          </div>
+        </div>
+      </main>
+    </section>
+
   </div>
 
   <!-- Diálogo de Recuperación de Sesión (Modal) -->
@@ -425,6 +455,24 @@
       <div class="modal-actions" style="display: flex; gap: 12px;">
         <button id="btn-recovery-discard" class="modal-btn secondary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--bg-primary); color: var(--text-main); font-weight: 700; cursor: pointer;">Descartar</button>
         <button id="btn-recovery-resume" class="modal-btn primary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: none; background: var(--color-accent); color: white; font-weight: 700; cursor: pointer;">Reanudar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Editar Alias de Sensor (Bautizar) -->
+  <div id="sensor-alias-modal" class="modal-overlay hide">
+    <div class="modal-content">
+      <h3 style="font-family: var(--font-sport); font-weight: 800; color: var(--color-accent); margin-bottom: 8px; font-size: 18px;">Bautizar Sensor</h3>
+      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-bottom: 16px;">Asigna un nombre personalizado para reconocer este sensor en tu pantalla de rodada.</p>
+      
+      <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 20px; text-align: left;">
+        <label for="sensor-alias-input" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Nombre Personalizado</label>
+        <input type="text" id="sensor-alias-input" style="width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; font-weight: 600; outline: none; background: var(--bg-primary);" placeholder="Ej: Mi Banda Garmin">
+      </div>
+      
+      <div class="modal-actions" style="display: flex; gap: 12px;">
+        <button id="btn-alias-cancel" class="modal-btn secondary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--bg-primary); color: var(--text-main); font-weight: 700; cursor: pointer;">Cancelar</button>
+        <button id="btn-alias-save" class="modal-btn primary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: none; background: var(--color-accent); color: white; font-weight: 700; cursor: pointer;">Guardar</button>
       </div>
     </div>
   </div>
