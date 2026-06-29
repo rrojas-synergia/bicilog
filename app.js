@@ -13,6 +13,7 @@ const AppState = {
   hrZones: null,
   rides: [],
   selectedRide: null,
+  wakeLock: null, // Bloqueo de suspensión de pantalla
 
   // Mapas Leaflet
   recMap: null,
@@ -154,6 +155,35 @@ const DOM = {
   btnRecoveryDiscard: document.getElementById('btn-recovery-discard'),
   btnRecoveryResume: document.getElementById('btn-recovery-resume')
 };
+
+// --- SCREEN WAKE LOCK API ---
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      AppState.wakeLock = await navigator.wakeLock.request('screen');
+      console.log('[WakeLock] Bloqueo de pantalla adquirido con éxito.');
+      AppState.wakeLock.addEventListener('release', () => {
+        console.log('[WakeLock] Bloqueo de pantalla liberado.');
+      });
+    } catch (err) {
+      console.error(`[WakeLock] Error al adquirir Wake Lock: ${err.name}, ${err.message}`);
+    }
+  } else {
+    console.warn('[WakeLock] La API de Wake Lock no está soportada en este navegador.');
+  }
+}
+
+function releaseWakeLock() {
+  if (AppState.wakeLock !== null) {
+    AppState.wakeLock.release()
+      .then(() => {
+        AppState.wakeLock = null;
+      })
+      .catch(err => {
+        console.error('[WakeLock] Error al liberar Wake Lock:', err);
+      });
+  }
+}
 
 // --- NAVEGACIÓN SPA ---
 function navigateTo(screenId) {
@@ -504,6 +534,9 @@ function startWorkout() {
   // Inicializar mapa de grabación Leaflet
   initRecordingMap();
 
+  // Adquirir bloqueo de suspensión de pantalla
+  requestWakeLock();
+
   // Buscar y autoconectar sensores emparejados en el navegador
   triggerSilentBluetoothReconnect();
 
@@ -641,6 +674,9 @@ function pauseWorkout() {
   DOM.btnPauseRide.classList.add('hide');
   DOM.btnResumeRide.classList.remove('hide');
   
+  // Liberar bloqueo de suspensión de pantalla al pausar
+  releaseWakeLock();
+
   if (!AppState.simulation.isActive) {
     BiciGPS.stopTracking();
   }
@@ -651,6 +687,9 @@ function resumeWorkout() {
   AppState.activeRide.isPaused = false;
   DOM.btnPauseRide.classList.remove('hide');
   DOM.btnResumeRide.classList.add('hide');
+
+  // Adquirir bloqueo de suspensión de pantalla al reanudar
+  requestWakeLock();
 
   if (!AppState.simulation.isActive) {
     BiciGPS.startTracking(
@@ -690,6 +729,9 @@ function stopWorkout() {
   clearInterval(AppState.activeRide.timerInterval);
   clearInterval(AppState.activeRide.sampleInterval);
   
+  // Liberar bloqueo de suspensión al finalizar rodada
+  releaseWakeLock();
+
   if (AppState.simulation.isActive) {
     stopDemoSimulation();
   } else {
@@ -1026,6 +1068,9 @@ function stopDemoSimulation() {
 // --- RECUPERACIÓN DE SESIÓN ---
 
 function resumeActiveSession(session) {
+  // Adquirir bloqueo de pantalla al recuperar la sesión activa
+  requestWakeLock();
+
   AppState.activeRide = {
     isRecording: true,
     isPaused: false,
@@ -1541,6 +1586,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const saved = Storage.getActiveSession();
     if (saved) resumeActiveSession(saved);
   });
+});
+
+// Escuchar cambios de visibilidad de la página para restaurar Wake Lock
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    if (AppState.activeRide && AppState.activeRide.isRecording && !AppState.activeRide.isPaused) {
+      await requestWakeLock();
+    }
+  }
+});
+
+// Escuchar cambios de estado BLE para actualizar pastillas en la UI
+window.addEventListener('ble-status-change', (e) => {
+  const { type, status, displayName } = e.detail;
+  updateSensorPillState(type, status, displayName);
 });
 
 // Registrar Service Worker

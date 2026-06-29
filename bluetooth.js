@@ -10,9 +10,17 @@ export const BiciSensors = {
   hrCharacteristic: null,
   cscCharacteristic: null,
 
-  // Estados
+  // Estados y callbacks de reconexión
   isHrConnected: false,
   isCscConnected: false,
+  isManualDisconnect: false,
+  isHrReconnecting: false,
+  isCscReconnecting: false,
+  hrCallbacks: null,
+  cscCallbacks: null,
+  onStatusUpdate: null,
+  onHrDisconnect: null,
+  onCscDisconnect: null,
 
   // Variables para el cálculo de cadencia (Crank Revolutions)
   lastCrankRevolutions: -1,
@@ -30,6 +38,7 @@ export const BiciSensors = {
   async connectHeartRate(onValue, onDisconnect) {
     try {
       this.checkBluetoothSupport();
+      this.isManualDisconnect = false;
 
       console.log("[BLE] Solicitando pulsómetro con filtrado estricto GATT 0x180D...");
       this.hrDevice = await navigator.bluetooth.requestDevice({
@@ -46,6 +55,7 @@ export const BiciSensors = {
   async connectCadence(onValue, onDisconnect) {
     try {
       this.checkBluetoothSupport();
+      this.isManualDisconnect = false;
 
       console.log("[BLE] Solicitando sensor de cadencia con filtrado estricto GATT 0x1816...");
       this.cscDevice = await navigator.bluetooth.requestDevice({
@@ -58,19 +68,152 @@ export const BiciSensors = {
     }
   },
 
+  // Inicializar handlers de desconexión reutilizables
+  setupDisconnectListeners() {
+    if (!this.onHrDisconnect) {
+      this.onHrDisconnect = async (event) => {
+        const device = event.target;
+        this.isHrConnected = false;
+        
+        if (this.isManualDisconnect) {
+          console.log("[BLE] Desconexión manual de FC detectada.");
+          if (this.hrCallbacks && this.hrCallbacks.onDisconnect) {
+            const sensorInfo = await DB.getSensor(device.id);
+            const displayName = sensorInfo ? sensorInfo.customName : (device.name || 'Pulsómetro');
+            this.hrCallbacks.onDisconnect(`${displayName} desconectado`);
+          }
+          return;
+        }
+
+        console.warn("[BLE] Desconexión inesperada de FC. Iniciando bucle de reconexión...");
+        this.reconnectDevice(device, 'hr', this.hrCallbacks?.onValue, this.hrCallbacks?.onDisconnect);
+      };
+    }
+
+    if (!this.onCscDisconnect) {
+      this.onCscDisconnect = async (event) => {
+        const device = event.target;
+        this.isCscConnected = false;
+        this.lastCrankRevolutions = -1;
+        this.lastCrankEventTime = -1;
+        
+        if (this.isManualDisconnect) {
+          console.log("[BLE] Desconexión manual de Cadencia detectada.");
+          if (this.cscCallbacks && this.cscCallbacks.onDisconnect) {
+            const sensorInfo = await DB.getSensor(device.id);
+            const displayName = sensorInfo ? sensorInfo.customName : (device.name || 'Sensor de Cadencia');
+            this.cscCallbacks.onDisconnect(`${displayName} desconectado`);
+          }
+          return;
+        }
+
+        console.warn("[BLE] Desconexión inesperada de Cadencia. Iniciando bucle de reconexión...");
+        this.reconnectDevice(device, 'cadence', this.cscCallbacks?.onValue, this.cscCallbacks?.onDisconnect);
+      };
+    }
+  },
+
+  // Método para actualizar el estado del sensor (despachando evento y callback)
+  updateStatus(type, status, displayName) {
+    if (this.onStatusUpdate) {
+      this.onStatusUpdate(type, status, displayName);
+    }
+    window.dispatchEvent(new CustomEvent('ble-status-change', {
+      detail: { type, status, displayName }
+    }));
+  },
+
+  // Bucle de reconexión asíncrono resiliente
+  async reconnectDevice(device, type, onValue, onDisconnect, maxRetries = 5, delayMs = 3000) {
+    const isHr = (type === 'hr');
+    if (isHr) {
+      if (this.isHrReconnecting) return;
+      this.isHrReconnecting = true;
+    } else {
+      if (this.isCscReconnecting) return;
+      this.isCscReconnecting = true;
+    }
+
+    const sensorInfo = await DB.getSensor(device.id);
+    const displayName = sensorInfo ? sensorInfo.customName : (device.name || (isHr ? 'Pulsómetro' : 'Sensor de Cadencia'));
+
+    this.updateStatus(type, 'connecting', displayName);
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (this.isManualDisconnect) {
+        console.log(`[BLE] [${displayName}] Intento ${attempt}: Cancelando reconexión por desconexión manual.`);
+        if (isHr) this.isHrReconnecting = false;
+        else this.isCscReconnecting = false;
+        return;
+      }
+
+      console.warn(`[BLE] [${displayName}] Intentando reconectar (${attempt}/${maxRetries})...`);
+
+      try {
+        if (isHr) {
+          this.hrServer = await device.gatt.connect();
+          const service = await this.hrServer.getPrimaryService('heart_rate');
+          this.hrCharacteristic = await service.getCharacteristic('heart_rate_measurement');
+          
+          this.hrCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
+            const val = event.target.value;
+            const hr = this.parseHeartRate(val);
+            if (onValue) onValue(hr);
+          });
+          
+          await this.hrCharacteristic.startNotifications();
+          this.isHrConnected = true;
+        } else {
+          this.cscServer = await device.gatt.connect();
+          const service = await this.cscServer.getPrimaryService('cycling_speed_and_cadence');
+          this.cscCharacteristic = await service.getCharacteristic('csc_measurement');
+          
+          this.cscCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
+            const val = event.target.value;
+            const cadence = this.parseCadence(val);
+            if (cadence !== null && onValue) {
+              onValue(cadence);
+            }
+          });
+          
+          await this.cscCharacteristic.startNotifications();
+          this.isCscConnected = true;
+        }
+
+        console.log(`[BLE] [${displayName}] Reconectado con éxito.`);
+        this.updateStatus(type, 'connected', displayName);
+        
+        if (isHr) this.isHrReconnecting = false;
+        else this.isCscReconnecting = false;
+        return;
+      } catch (err) {
+        console.error(`[BLE] [${displayName}] Falló intento ${attempt}/${maxRetries}:`, err);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
+    }
+
+    if (isHr) this.isHrReconnecting = false;
+    else this.isCscReconnecting = false;
+
+    console.error(`[BLE] [${displayName}] No se pudo reconectar tras ${maxRetries} intentos.`);
+    this.updateStatus(type, 'disconnected', displayName);
+
+    if (onDisconnect) {
+      onDisconnect(`${displayName} desconectado permanentemente.`);
+    }
+  },
+
   // Establecer conexión y registrar Fingerprint para FC
   async establishHrConnection(device, onValue, onDisconnect, isSilent = false) {
     console.log(`[BLE] Conectando GATT a dispositivo FC: ${device.name || device.id}`);
+    this.isManualDisconnect = false;
     
-    device.addEventListener('gattserverdisconnected', async (event) => {
-      this.isHrConnected = false;
-      if (onDisconnect) {
-        // Buscar si tiene alias personalizado
-        const sensorInfo = await DB.getSensor(device.id);
-        const displayName = sensorInfo ? sensorInfo.customName : (device.name || 'Pulsómetro');
-        onDisconnect(`${displayName} desconectado`);
-      }
-    });
+    this.setupDisconnectListeners();
+    this.hrCallbacks = { onValue, onDisconnect };
+    device.removeEventListener('gattserverdisconnected', this.onHrDisconnect);
+    device.addEventListener('gattserverdisconnected', this.onHrDisconnect);
 
     this.hrServer = await device.gatt.connect();
     const service = await this.hrServer.getPrimaryService('heart_rate');
@@ -98,17 +241,12 @@ export const BiciSensors = {
   // Establecer conexión y registrar Fingerprint para Cadencia
   async establishCscConnection(device, onValue, onDisconnect, isSilent = false) {
     console.log(`[BLE] Conectando GATT a dispositivo Cadencia: ${device.name || device.id}`);
+    this.isManualDisconnect = false;
 
-    device.addEventListener('gattserverdisconnected', async (event) => {
-      this.isCscConnected = false;
-      this.lastCrankRevolutions = -1;
-      this.lastCrankEventTime = -1;
-      if (onDisconnect) {
-        const sensorInfo = await DB.getSensor(device.id);
-        const displayName = sensorInfo ? sensorInfo.customName : (device.name || 'Sensor de Cadencia');
-        onDisconnect(`${displayName} desconectado`);
-      }
-    });
+    this.setupDisconnectListeners();
+    this.cscCallbacks = { onValue, onDisconnect };
+    device.removeEventListener('gattserverdisconnected', this.onCscDisconnect);
+    device.addEventListener('gattserverdisconnected', this.onCscDisconnect);
 
     this.cscServer = await device.gatt.connect();
     const service = await this.cscServer.getPrimaryService('cycling_speed_and_cadence');
@@ -143,6 +281,9 @@ export const BiciSensors = {
         return false;
       }
 
+      this.isManualDisconnect = false;
+      this.onStatusUpdate = onStatusUpdate;
+
       console.log("[BLE] Buscando dispositivos previamente emparejados en el navegador...");
       const allowedDevices = await navigator.bluetooth.getDevices();
       
@@ -161,32 +302,32 @@ export const BiciSensors = {
         const sensorInfo = registeredSensors.find(s => s.deviceId === device.id);
 
         if (sensorInfo.deviceType === 'hr' && !this.isHrConnected) {
-          if (onStatusUpdate) onStatusUpdate('hr', 'connecting', sensorInfo.customName);
+          this.updateStatus('hr', 'connecting', sensorInfo.customName);
           
           this.hrDevice = device;
           this.establishHrConnection(device, onHrValue, onDisconnectCallback, true)
             .then(() => {
               console.log(`[BLE] Autoconexión exitosa a FC: ${sensorInfo.customName}`);
-              if (onStatusUpdate) onStatusUpdate('hr', 'connected', sensorInfo.customName);
+              this.updateStatus('hr', 'connected', sensorInfo.customName);
             })
             .catch(err => {
               console.error(`[BLE] Fallo de autoconexión a FC: ${sensorInfo.customName}`, err);
-              if (onStatusUpdate) onStatusUpdate('hr', 'disconnected', sensorInfo.customName);
+              this.updateStatus('hr', 'disconnected', sensorInfo.customName);
             });
         } 
         
         else if (sensorInfo.deviceType === 'cadence' && !this.isCscConnected) {
-          if (onStatusUpdate) onStatusUpdate('cadence', 'connecting', sensorInfo.customName);
+          this.updateStatus('cadence', 'connecting', sensorInfo.customName);
           
           this.cscDevice = device;
           this.establishCscConnection(device, onCscValue, onDisconnectCallback, true)
             .then(() => {
               console.log(`[BLE] Autoconexión exitosa a Cadencia: ${sensorInfo.customName}`);
-              if (onStatusUpdate) onStatusUpdate('cadence', 'connected', sensorInfo.customName);
+              this.updateStatus('cadence', 'connected', sensorInfo.customName);
             })
             .catch(err => {
               console.error(`[BLE] Fallo de autoconexión a Cadencia: ${sensorInfo.customName}`, err);
-              if (onStatusUpdate) onStatusUpdate('cadence', 'disconnected', sensorInfo.customName);
+              this.updateStatus('cadence', 'disconnected', sensorInfo.customName);
             });
         }
       }
@@ -199,6 +340,9 @@ export const BiciSensors = {
 
   // Desconectar todos los sensores
   disconnectAll() {
+    this.isManualDisconnect = true;
+    this.isHrReconnecting = false;
+    this.isCscReconnecting = false;
     if (this.hrDevice && this.hrDevice.gatt.connected) {
       this.hrDevice.gatt.disconnect();
     }

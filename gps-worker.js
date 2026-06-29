@@ -283,7 +283,37 @@ self.onmessage = function (e) {
   } 
   
   else if (type === 'GPS_RAW') {
-    const { lat, lon, alt, speed: rawSpeed, timestamp } = data;
+    const { lat, lon, alt, speed: rawSpeed, timestamp, accuracy } = data;
+
+    // Regla 1: Descartar coordenadas de baja precisión (> 20 metros)
+    if (accuracy !== undefined && accuracy !== null && accuracy > 20) {
+      console.warn(`[Worker] Coordenada descartada por baja precisión (${accuracy.toFixed(1)}m > 20m)`);
+      return;
+    }
+
+    // Regla 2: Descartar saltos masivos de GPS (Velocidad implícita > 120 km/h)
+    if (gpsPoints.length > 0) {
+      const lastPoint = gpsPoints[gpsPoints.length - 1];
+      const timeDiff = (timestamp - lastPoint.timestamp) / 1000; // segundos
+      
+      if (timeDiff > 0) {
+        const R = 6371; // Radio de la Tierra en km
+        const dLat = (lat - lastPoint.lat) * Math.PI / 180;
+        const dLon = (lon - lastPoint.lon) * Math.PI / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lastPoint.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const rawDist = R * c; // distancia en km
+        const implicitSpeed = (rawDist * 3600) / timeDiff; // velocidad implícita en km/h
+
+        if (implicitSpeed > 120) {
+          console.warn(`[Worker] Coordenada descartada por salto GPS de velocidad física imposible: ${implicitSpeed.toFixed(1)} km/h`);
+          return;
+        }
+      }
+    }
 
     // 1. Limpieza de datos (Filtro de Kalman)
     const filteredLat = latFilter.filter(lat);
@@ -300,7 +330,13 @@ self.onmessage = function (e) {
       filteredAlt = altitudeHistory.reduce((a, b) => a + b, 0) / altitudeHistory.length;
     }
 
-    let calculatedSpeed = rawSpeed || 0;
+    // Priorizar velocidad del GPS nativo si está disponible (convertida de m/s a km/h)
+    let calculatedSpeed = 0;
+    const hasRawSpeed = (rawSpeed !== null && rawSpeed !== undefined && rawSpeed >= 0);
+    if (hasRawSpeed) {
+      calculatedSpeed = rawSpeed * 3.6;
+    }
+
     let pointDistance = 0;
 
     // 3. Calcular distancia y velocidad basadas en filtro de Kalman
@@ -327,12 +363,15 @@ self.onmessage = function (e) {
       
       if (estSpeed > 1.5) {
         totalDistance += pointDistance;
-        if (rawSpeed === null || rawSpeed === 0) {
+        if (!hasRawSpeed) {
           calculatedSpeed = estSpeed;
         }
       } else {
         pointDistance = 0;
-        calculatedSpeed = 0;
+        // Si no hay movimiento real estimado y la velocidad GPS nativa es baja/cero, forzar a 0
+        if (!hasRawSpeed || calculatedSpeed < 1.5) {
+          calculatedSpeed = 0;
+        }
       }
 
       // Calcular Ascenso (desnivel acumulado positivo)

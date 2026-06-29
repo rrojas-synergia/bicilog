@@ -69,7 +69,8 @@ export const BiciGPS = {
               lon: coords.longitude,
               alt: coords.altitude,
               speed: coords.speed, // m/s
-              timestamp: position.timestamp
+              timestamp: position.timestamp,
+              accuracy: coords.accuracy
             }
           });
         }
