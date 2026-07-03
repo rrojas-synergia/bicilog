@@ -293,7 +293,7 @@ self.onmessage = function (e) {
 
     // --- WARM-UP: validar los primeros 3 puntos antes de encender la lógica ---
     if (WARMUP_QUEUE.length < WARMUP_SIZE) {
-      if (accuracy !== undefined && accuracy !== null && accuracy > 20) {
+      if (accuracy !== undefined && accuracy !== null && accuracy > 60) {
         console.warn(`[Worker Warmup] Punto descartado por precisión (${accuracy.toFixed(0)}m). Reiniciando warm-up.`);
         WARMUP_QUEUE.length = 0;
         return;
@@ -336,8 +336,8 @@ self.onmessage = function (e) {
 
     // --- FILTROS ESTRICTOS (post warm-up) ---
     // Filtro 1: Precisión
-    if (accuracy !== undefined && accuracy !== null && accuracy > 20) {
-      console.warn(`[Worker] Coordenada descartada por baja precisión (${accuracy.toFixed(1)}m > 20m)`);
+    if (accuracy !== undefined && accuracy !== null && accuracy > 60) {
+      console.warn(`[Worker] Coordenada descartada por baja precisión (${accuracy.toFixed(1)}m > 60m)`);
       return;
     }
 
@@ -479,6 +479,7 @@ self.onmessage = function (e) {
         ascent: totalAscent,
         grade: grade,
         power: power,
+        accuracy: accuracy,
         climbInfo: climbInfo
       }
     });

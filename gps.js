@@ -39,6 +39,7 @@ export const BiciGPS = {
             ascent: data.ascent,
             grade: data.grade,
             power: data.power,
+            accuracy: data.accuracy,
             climbInfo: data.climbInfo
           });
         }
@@ -102,7 +103,7 @@ export const BiciGPS = {
     let totalDist = 0;
     let totalAscent = 0;
 
-    const MAX_ACCURACY_M = 20;
+    const MAX_ACCURACY_M = 60;
     const MAX_SPEED_KMH = 120;   // imposible en bicicleta
     const MIN_DIST_KM = 0.001;   // ~1 metro mínimo para acumular
     const R = 6371;
@@ -194,6 +195,7 @@ export const BiciGPS = {
               ascent: totalAscent,
               grade: grade,
               power: power,
+              accuracy: accuracy,
               climbInfo: null
             });
           }

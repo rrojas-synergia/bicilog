@@ -6,6 +6,8 @@ import { BiciSensors } from './bluetooth.js';
 import { BiciGPS } from './gps.js';
 import { BiciCharts } from './charts.js';
 
+const APP_VERSION = "0.0.2";
+
 // --- ESTADO GLOBAL DE LA APLICACIÓN ---
 const AppState = {
   currentScreen: 'dashboard',
@@ -183,6 +185,17 @@ function releaseWakeLock() {
         console.error('[WakeLock] Error al liberar Wake Lock:', err);
       });
   }
+}
+
+function updateGpsAccuracyUI(accuracy) {
+  if (accuracy === undefined || accuracy === null) {
+    DOM.gpsAccuracy.textContent = 'GPS: --';
+    DOM.gpsAccuracy.style.color = '';
+    return;
+  }
+  const m = Math.round(accuracy);
+  DOM.gpsAccuracy.textContent = `GPS: ${m}m`;
+  DOM.gpsAccuracy.style.color = m < 30 ? 'var(--color-success)' : '#FF9F43';
 }
 
 // --- NAVEGACIÓN SPA ---
@@ -543,7 +556,12 @@ function startWorkout() {
   // 1. Iniciar Cronómetro
   AppState.activeRide.timerInterval = setInterval(() => {
     if (AppState.settings.autoPause) {
-      if (AppState.activeRide.speed < 2.0) {
+      // Auto-pausa solo si NO hay GPS, NI HR, NI cadencia
+      const noMovement = AppState.activeRide.speed < 2.0;
+      const noHr = AppState.activeRide.hr === 0;
+      const noCadence = AppState.activeRide.cadence === 0;
+
+      if (noMovement && noHr && noCadence) {
         AppState.activeRide.autoPauseTicks++;
         if (AppState.activeRide.autoPauseTicks >= 6 && !AppState.activeRide.isAutoPaused) {
           AppState.activeRide.isAutoPaused = true;
@@ -624,6 +642,7 @@ function startWorkout() {
         DOM.liveAscent.textContent = Math.round(gpsData.ascent);
         DOM.liveGrade.textContent = Math.round(gpsData.grade) + '%';
         DOM.liveWatts.textContent = Math.round(gpsData.power);
+        updateGpsAccuracyUI(gpsData.accuracy);
         
         const baseTemp = 22;
         const tempShift = -((gpsData.ascent / 100) * 0.65);
@@ -710,6 +729,7 @@ function resumeWorkout() {
         DOM.liveAscent.textContent = Math.round(gpsData.ascent);
         DOM.liveGrade.textContent = Math.round(gpsData.grade) + '%';
         DOM.liveWatts.textContent = Math.round(gpsData.power);
+        updateGpsAccuracyUI(gpsData.accuracy);
 
         if (AppState.recMap && gpsData.latitude && gpsData.longitude) {
           const newPos = [gpsData.latitude, gpsData.longitude];
@@ -1149,6 +1169,7 @@ function resumeActiveSession(session) {
         DOM.liveAscent.textContent = Math.round(gpsData.ascent);
         DOM.liveGrade.textContent = Math.round(gpsData.grade) + '%';
         DOM.liveWatts.textContent = Math.round(gpsData.power);
+        updateGpsAccuracyUI(gpsData.accuracy);
 
         if (AppState.recMap && gpsData.latitude && gpsData.longitude) {
           const newPos = [gpsData.latitude, gpsData.longitude];
@@ -1164,7 +1185,11 @@ function resumeActiveSession(session) {
 
   AppState.activeRide.timerInterval = setInterval(() => {
     if (AppState.settings.autoPause) {
-      if (AppState.activeRide.speed < 2.0) {
+      const noMovement = AppState.activeRide.speed < 2.0;
+      const noHr = AppState.activeRide.hr === 0;
+      const noCadence = AppState.activeRide.cadence === 0;
+
+      if (noMovement && noHr && noCadence) {
         AppState.activeRide.autoPauseTicks++;
         if (AppState.activeRide.autoPauseTicks >= 6 && !AppState.activeRide.isAutoPaused) {
           AppState.activeRide.isAutoPaused = true;
@@ -1492,6 +1517,7 @@ document.addEventListener('DOMContentLoaded', () => {
             DOM.liveAscent.textContent = Math.round(gpsData.ascent);
             DOM.liveGrade.textContent = Math.round(gpsData.grade) + '%';
             DOM.liveWatts.textContent = Math.round(gpsData.power);
+            updateGpsAccuracyUI(gpsData.accuracy);
 
             if (AppState.recMap && gpsData.latitude && gpsData.longitude) {
               const newPos = [gpsData.latitude, gpsData.longitude];
