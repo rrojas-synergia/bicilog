@@ -772,8 +772,11 @@ function stopWorkout() {
     rideData.samples.push({ time: rideData.elapsedSeconds, hr: rideData.hr || 70, speed: rideData.speed || 0, cadence: rideData.cadence || 0 });
   }
 
+  const movingSamples = rideData.samples.filter(s => s.speed > 2);
+  const movingTime = movingSamples.length * 5; // segundos (intervalo de muestreo 5s)
+
   const hrs = rideData.samples.map(s => s.hr).filter(h => h > 0);
-  const speeds = rideData.samples.map(s => s.speed);
+  const speeds = movingSamples.map(s => s.speed);
   const cadences = rideData.samples.map(s => s.cadence).filter(c => c > 0);
 
   const avgHr = hrs.length > 0 ? hrs.reduce((a, b) => a + b, 0) / hrs.length : 0;
@@ -790,6 +793,7 @@ function stopWorkout() {
     timestamp: Date.now(),
     title: timeOfDay,
     duration: rideData.elapsedSeconds,
+    movingTime: movingTime,
     distance: rideData.distance,
     ascent: rideData.ascent,
     avgSpeed: avgSpeed || rideData.speed || 0,
@@ -799,7 +803,7 @@ function stopWorkout() {
     avgTemp: rideData.temp,
     samples: rideData.samples,
     zoneTimes: rideData.zoneTimes,
-    sync_status: 'pending' // Estado por defecto
+    sync_status: 'pending'
   };
 
   // Guardar en la base de datos asíncrona IndexedDB
