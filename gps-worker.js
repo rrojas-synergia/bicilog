@@ -37,6 +37,11 @@ let totalDistance = 0; // en KM
 let totalAscent = 0; // en metros
 let altitudeHistory = []; // Para media móvil de altitud
 
+// Warm-up: Los primeros 3 puntos consecutivos válidos deben pasar el filtro de
+// velocidad física entre sí antes de encender los Kalman y acumular distancia.
+const WARMUP_QUEUE = [];
+const WARMUP_SIZE = 3;
+
 // Configuración de la bicicleta y ciclista (valores por defecto)
 let riderWeight = 70; // kg
 let bikeWeight = 10;  // kg
@@ -277,6 +282,7 @@ self.onmessage = function (e) {
     altitudeHistory = [];
     activeClimb = null;
     slidingWindow = [];
+    WARMUP_QUEUE.length = 0;
     latFilter.x = null;
     lonFilter.x = null;
     altFilter.x = null;
@@ -285,13 +291,57 @@ self.onmessage = function (e) {
   else if (type === 'GPS_RAW') {
     const { lat, lon, alt, speed: rawSpeed, timestamp, accuracy } = data;
 
-    // Regla 1: Descartar coordenadas de baja precisión (> 20 metros)
+    // --- WARM-UP: validar los primeros 3 puntos antes de encender la lógica ---
+    if (WARMUP_QUEUE.length < WARMUP_SIZE) {
+      if (accuracy !== undefined && accuracy !== null && accuracy > 20) {
+        console.warn(`[Worker Warmup] Punto descartado por precisión (${accuracy.toFixed(0)}m). Reiniciando warm-up.`);
+        WARMUP_QUEUE.length = 0;
+        return;
+      }
+      WARMUP_QUEUE.push({ lat, lon, alt, timestamp });
+      if (WARMUP_QUEUE.length === WARMUP_SIZE) {
+        // Validar que los 3 puntos no tengan saltos entre sí
+        let warmupOk = true;
+        for (let i = 1; i < WARMUP_QUEUE.length; i++) {
+          const prev = WARMUP_QUEUE[i - 1];
+          const curr = WARMUP_QUEUE[i];
+          const timeDiff = (curr.timestamp - prev.timestamp) / 1000;
+          if (timeDiff <= 0) { warmupOk = false; break; }
+          const R = 6371;
+          const dLat = (curr.lat - prev.lat) * Math.PI / 180;
+          const dLon = (curr.lon - prev.lon) * Math.PI / 180;
+          const a = Math.sin(dLat / 2) ** 2 +
+                    Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) *
+                    Math.sin(dLon / 2) ** 2;
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const distKm = R * c;
+          const impSpeed = (distKm * 3600) / timeDiff;
+          if (impSpeed > 120) { warmupOk = false; break; }
+        }
+        if (!warmupOk) {
+          console.warn('[Worker Warmup] Salto detectado en fase warm-up. Reiniciando buffer.');
+          WARMUP_QUEUE.length = 0;
+        } else {
+          console.log('[Worker Warmup] Warm-up exitoso. Iniciando tracking GPS con filtros Kalman.');
+          for (const pt of WARMUP_QUEUE) {
+            latFilter.filter(pt.lat);
+            lonFilter.filter(pt.lon);
+            if (pt.alt !== null) { altFilter.filter(pt.alt); altitudeHistory.push(pt.alt); }
+            gpsPoints.push({ lat: pt.lat, lon: pt.lon, alt: pt.alt, timestamp: pt.timestamp, distance: 0, speed: 0, grade: 0, power: 0, idx: gpsPoints.length });
+          }
+        }
+      }
+      return;
+    }
+
+    // --- FILTROS ESTRICTOS (post warm-up) ---
+    // Filtro 1: Precisión
     if (accuracy !== undefined && accuracy !== null && accuracy > 20) {
       console.warn(`[Worker] Coordenada descartada por baja precisión (${accuracy.toFixed(1)}m > 20m)`);
       return;
     }
 
-    // Regla 2: Descartar saltos masivos de GPS (Velocidad implícita > 120 km/h)
+    // Filtro 2: Velocidad implícita > 120 km/h (salto de torre/IP)
     if (gpsPoints.length > 0) {
       const lastPoint = gpsPoints[gpsPoints.length - 1];
       const timeDiff = (timestamp - lastPoint.timestamp) / 1000; // segundos

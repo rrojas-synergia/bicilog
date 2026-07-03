@@ -96,47 +96,118 @@ export const BiciGPS = {
   },
 
   // Caída de emergencia síncrona si no hay Web Workers disponibles
+  // Incluye los mismos filtros estrictos del Worker para evitar saltos GPS
   startFallbackTracking(settings, onPositionUpdate, onError) {
-    let lastCoords = null;
+    let lastValid = null;  // { lat, lon, alt, ts }
     let totalDist = 0;
-    
+    let totalAscent = 0;
+
+    const MAX_ACCURACY_M = 20;
+    const MAX_SPEED_KMH = 120;   // imposible en bicicleta
+    const MIN_DIST_KM = 0.001;   // ~1 metro mínimo para acumular
+    const R = 6371;
+
+    const haversineKm = (lat1, lon1, lat2, lon2) => {
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
     this.watchId = navigator.geolocation.watchPosition(
       (position) => {
         const coords = position.coords;
-        let speed = coords.speed !== null ? coords.speed * 3.6 : 0;
-        
-        if (lastCoords) {
-          // Fórmula Haversine simple
-          const R = 6371;
-          const dLat = (coords.latitude - lastCoords.latitude) * Math.PI / 180;
-          const dLon = (coords.longitude - lastCoords.longitude) * Math.PI / 180;
-          const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lastCoords.latitude * Math.PI / 180) * Math.cos(coords.latitude * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          const dist = R * c;
-          
-          if (dist > 0.002) {
-            totalDist += dist;
+        const accuracy = coords.accuracy !== null ? coords.accuracy : 999;
+
+        // --- Regla 1: Precisión ---
+        if (accuracy > MAX_ACCURACY_M) {
+          console.warn(`[GPS Fallback] Punto descartado: accuracy ${accuracy.toFixed(0)}m > ${MAX_ACCURACY_M}m`);
+          return;
+        }
+
+        const hasRawSpeed = (coords.speed !== null && coords.speed !== undefined && coords.speed >= 0);
+
+        if (!lastValid) {
+          // Primer punto aceptado (calienta la línea base)
+          lastValid = { lat: coords.latitude, lon: coords.longitude, alt: coords.altitude, ts: position.timestamp };
+          return;
+        }
+
+        const timeDiff = (position.timestamp - lastValid.ts) / 1000;
+
+        // --- Regla 2: Velocidad física implícita ---
+        if (timeDiff > 0) {
+          const segmentKm = haversineKm(lastValid.lat, lastValid.lon, coords.latitude, coords.longitude);
+          const implicitSpeed = (segmentKm * 3600) / timeDiff;
+
+          if (implicitSpeed > MAX_SPEED_KMH) {
+            console.warn(`[GPS Fallback] Salto masivo descartado: velocidad implícita ${implicitSpeed.toFixed(0)} km/h`);
+            return;
+          }
+
+          // Velocidad: priorizar dato nativo del GPS
+          let speedKmh = hasRawSpeed ? coords.speed * 3.6 : implicitSpeed;
+
+          // Anti-jitter: descartar micro-desplazamientos en reposo
+          if (implicitSpeed < 1.5) {
+            speedKmh = 0;
+          } else if (segmentKm > MIN_DIST_KM) {
+            totalDist += segmentKm;
+          }
+
+          // Ascenso acumulado positivo
+          if (coords.altitude !== null && lastValid.alt !== null) {
+            const altDiff = coords.altitude - lastValid.alt;
+            if (altDiff > 0.3 && speedKmh > 1.5) totalAscent += altDiff;
+          }
+
+          // Pendiente instantánea
+          let grade = 0;
+          if (segmentKm > 0 && coords.altitude !== null && lastValid.alt !== null) {
+            grade = ((coords.altitude - lastValid.alt) / (segmentKm * 1000)) * 100;
+            grade = Math.max(-25, Math.min(25, grade));
+          }
+
+          // Potencia estimada simple (física de ciclismo)
+          const totalMass = (settings.weight || 70) + (settings.bikeWeight || 10);
+          const speedMs = speedKmh / 3.6;
+          const angleRad = Math.atan(grade / 100);
+          const fGravity = totalMass * 9.81 * Math.sin(angleRad);
+          const fRolling = totalMass * 9.81 * Math.cos(angleRad) * 0.004;
+          const fDrag = 0.5 * 0.32 * 1.225 * Math.pow(speedMs, 2);
+          let power = (fGravity + fRolling + fDrag) * speedMs;
+          if (power < 0) power = 0;
+          power = Math.round(power / 0.95);
+
+          // Actualizar línea base
+          lastValid = { lat: coords.latitude, lon: coords.longitude, alt: coords.altitude, ts: position.timestamp };
+
+          if (onPositionUpdate) {
+            onPositionUpdate({
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              altitude: coords.altitude,
+              speed: speedKmh,
+              distance: totalDist,
+              ascent: totalAscent,
+              grade: grade,
+              power: power,
+              climbInfo: null
+            });
           }
         }
-        
-        lastCoords = { latitude: coords.latitude, longitude: coords.longitude };
-        
-        if (onPositionUpdate) {
-          onPositionUpdate({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            altitude: coords.altitude,
-            speed: speed,
-            distance: totalDist,
-            ascent: 0,
-            grade: 0,
-            power: 0,
-            climbInfo: null
-          });
-        }
       },
-      onError,
-      { enableHighAccuracy: true, timeout: 5000 }
+      (error) => {
+        console.error("Error de sensor GPS nativo (fallback):", error);
+        if (onError) onError(error);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      }
     );
   }
 };
