@@ -30,7 +30,7 @@
       <header class="app-header">
         <div class="header-left">
           <span class="app-logo">Bici<span class="highlight">Log</span></span>
-          <span class="version-badge">v0.0.2</span>
+          <span class="version-badge">v0.0.3</span>
         </div>
         <button id="btn-open-settings" class="icon-button" aria-label="Ajustes">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -93,6 +93,15 @@
       </header>
 
       <main class="screen-content recording-layout">
+        <!-- Selector de Perfil de Bicicleta -->
+        <div class="bike-selector-bar">
+          <span class="bike-selector-icon">🚲</span>
+          <select id="bike-profile-select" class="bike-profile-select">
+            <option value="">Sin bici asignada</option>
+          </select>
+          <button id="btn-bike-manage" class="bike-manage-btn" aria-label="Gestionar bicicletas">+</button>
+        </div>
+
         <!-- Panel de Sensores / Conexión -->
         <div class="sensors-control-panel">
           <div class="sensor-connect-pill" id="sensor-pill-hr">
@@ -322,6 +331,9 @@
             <button type="button" id="btn-goto-sensors" class="submit-btn" style="background-color: var(--color-accent-light); color: var(--color-accent); border: none; box-shadow: none; height: 46px; border-radius: 12px; margin-bottom: 0; width: 100%; font-weight: 700;">
               ⚙️ Gestionar Sensores BLE
             </button>
+            <button type="button" id="btn-goto-bikes" class="submit-btn" style="background-color: #D3F8E8; color: #0d8a67; border: none; box-shadow: none; height: 46px; border-radius: 12px; margin-bottom: 0; width: 100%; font-weight: 700; margin-top: 12px;">
+              🚲 Gestionar Bicicletas
+            </button>
           </div>
 
           <!-- Perfil del Ciclista -->
@@ -432,6 +444,33 @@
             <!-- Generado dinámicamente -->
             <div class="empty-state">No tienes sensores emparejados.</div>
           </div>
+          <button id="btn-force-unpair" class="danger-btn-full" style="margin-top: 20px;">
+            ⚠️ Forzar Desemparejamiento Total
+          </button>
+          <p style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">Elimina todos los sensores guardados del almacenamiento del navegador. Útil si los permisos Bluetooth están corruptos.</p>
+        </div>
+      </main>
+    </section>
+
+    <!-- PANTALLA 6: GESTIÓN DE BICICLETAS -->
+    <section id="screen-bikes" class="app-screen">
+      <header class="app-header">
+        <button id="btn-bikes-back" class="icon-button" aria-label="Volver">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <span class="header-title">Mis Bicicletas</span>
+        <div style="width: 44px;"></div>
+      </header>
+      <main class="screen-content">
+        <div class="section-card">
+          <p class="settings-note" style="margin-top: 0; margin-bottom: 16px;">Cada bicicleta puede tener su propio sensor de cadencia. Selecciona una antes de rodar para evitar interferencias entre sensores.</p>
+          <div id="bikes-crud-list" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Generado dinámicamente -->
+            <div class="empty-state">No tienes bicicletas registradas.</div>
+          </div>
+          <button id="btn-add-bike" class="submit-btn" style="background-color: #D3F8E8; color: #0d8a67; border: none; box-shadow: none; height: 46px; border-radius: 12px; margin-top: 20px; width: 100%; font-weight: 700;">
+            ➕ Agregar Bicicleta
+          </button>
         </div>
       </main>
     </section>
@@ -474,6 +513,38 @@
       <div class="modal-actions" style="display: flex; gap: 12px;">
         <button id="btn-alias-cancel" class="modal-btn secondary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--bg-primary); color: var(--text-main); font-weight: 700; cursor: pointer;">Cancelar</button>
         <button id="btn-alias-save" class="modal-btn primary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: none; background: var(--color-accent); color: white; font-weight: 700; cursor: pointer;">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Agregar/Editar Perfil de Bicicleta -->
+  <div id="bike-profile-modal" class="modal-overlay hide">
+    <div class="modal-content">
+      <h3 id="bike-modal-title" style="font-family: var(--font-sport); font-weight: 800; color: #0d8a67; margin-bottom: 8px; font-size: 18px;">Nueva Bicicleta</h3>
+      
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; text-align: left;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <label for="bike-name-input" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Nombre</label>
+          <input type="text" id="bike-name-input" style="width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; font-weight: 600; outline: none; background: var(--bg-primary);" placeholder="Ej: Trek Domane">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <label for="bike-type-select" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tipo</label>
+          <select id="bike-type-select" style="width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; font-weight: 600; outline: none; background: var(--bg-primary);">
+            <option value="road">🚴 Ruta</option>
+            <option value="mtb">⛰️ Montaña</option>
+          </select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <label for="bike-cadence-select" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Sensor de Cadencia Asignado</label>
+          <select id="bike-cadence-select" style="width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; font-weight: 600; outline: none; background: var(--bg-primary);">
+            <option value="">Ninguno</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="modal-actions" style="display: flex; gap: 12px;">
+        <button id="btn-bike-cancel" class="modal-btn secondary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--bg-primary); color: var(--text-main); font-weight: 700; cursor: pointer;">Cancelar</button>
+        <button id="btn-bike-save" class="modal-btn primary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: none; background: #11caa0; color: white; font-weight: 700; cursor: pointer;">Guardar</button>
       </div>
     </div>
   </div>

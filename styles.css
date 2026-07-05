@@ -62,7 +62,7 @@ body {
   background-color: var(--bg-primary);
   /* Ajuste para notch de iOS */
   padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  padding-bottom: max(35px, env(safe-area-inset-bottom, 35px));
 }
 
 .app-screen.active {
@@ -389,6 +389,53 @@ body {
   gap: 16px;
 }
 
+/* Selector de Bicicleta en Grabación */
+.bike-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 6px var(--color-shadow);
+}
+
+.bike-selector-icon {
+  font-size: 20px;
+}
+
+.bike-profile-select {
+  flex: 1;
+  height: 36px;
+  border: none;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.bike-manage-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #D3F8E8;
+  color: #0d8a67;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Panel de control de sensores (Emparejamiento) */
 .sensors-control-panel {
   display: flex;
@@ -429,8 +476,8 @@ body {
 }
 
 .sensor-action-btn {
-  background: var(--color-accent-light);
-  color: var(--color-accent);
+  background: #D3F8E8;
+  color: #0d8a67;
   border: none;
   font-size: 12px;
   font-weight: 700;
@@ -442,7 +489,7 @@ body {
 }
 
 .sensor-action-btn:active {
-  background: var(--color-accent);
+  background: #11caa0;
   color: #fff;
 }
 
@@ -650,10 +697,10 @@ input:checked + .slider:before {
   justify-content: center;
   align-items: center;
   gap: 28px;
-  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding: 14px 16px max(35px, env(safe-area-inset-bottom, 35px));
   background: linear-gradient(0deg, var(--bg-primary) 85%, transparent);
   z-index: 20;
-  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08);
   margin-top: auto;
 }
 
@@ -908,6 +955,24 @@ input:checked + .slider:before {
 
 .submit-btn:active {
   background-color: #0066cc;
+}
+
+.danger-btn-full {
+  width: 100%;
+  height: 46px;
+  border-radius: 12px;
+  border: 2px solid var(--color-danger);
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.danger-btn-full:active {
+  background: var(--color-danger);
+  color: white;
 }
 
 /* --- ESTILOS DE RECUPERACIÓN DE SESIÓN (MODALES) --- */

@@ -6,7 +6,7 @@ import { BiciSensors } from './bluetooth.js';
 import { BiciGPS } from './gps.js';
 import { BiciCharts } from './charts.js';
 
-const APP_VERSION = "0.0.2";
+const APP_VERSION = "0.0.3";
 
 // --- ESTADO GLOBAL DE LA APLICACIÓN ---
 const AppState = {
@@ -57,7 +57,11 @@ const AppState = {
     simSpeed: 25.0,
     simHr: 120,
     simCad: 85
-  }
+  },
+
+  // Bicicletas
+  bikeProfiles: [],
+  selectedBikeProfileId: null
 };
 
 // --- SELECTORES DOM ---
@@ -67,7 +71,8 @@ const DOM = {
     recording: document.getElementById('screen-recording'),
     detail: document.getElementById('screen-detail'),
     settings: document.getElementById('screen-settings'),
-    sensors: document.getElementById('screen-sensors') // Pantalla de CRUD Sensores
+    sensors: document.getElementById('screen-sensors'), // Pantalla de CRUD Sensores
+    bikes: document.getElementById('screen-bikes')        // Pantalla de Perfiles de Bici
   },
   
   // Dashboard
@@ -149,6 +154,22 @@ const DOM = {
   sensorAliasInput: document.getElementById('sensor-alias-input'),
   btnAliasCancel: document.getElementById('btn-alias-cancel'),
   btnAliasSave: document.getElementById('btn-alias-save'),
+  btnForceUnpair: document.getElementById('btn-force-unpair'),
+
+  // Gestión de Bicicletas
+  btnGotoBikes: document.getElementById('btn-goto-bikes'),
+  btnBikesBack: document.getElementById('btn-bikes-back'),
+  bikesCrudList: document.getElementById('bikes-crud-list'),
+  btnAddBike: document.getElementById('btn-add-bike'),
+  bikeProfileSelect: document.getElementById('bike-profile-select'),
+  btnBikeManage: document.getElementById('btn-bike-manage'),
+  bikeProfileModal: document.getElementById('bike-profile-modal'),
+  bikeNameInput: document.getElementById('bike-name-input'),
+  bikeTypeSelect: document.getElementById('bike-type-select'),
+  bikeCadenceSelect: document.getElementById('bike-cadence-select'),
+  btnBikeCancel: document.getElementById('btn-bike-cancel'),
+  btnBikeSave: document.getElementById('btn-bike-save'),
+  bikeModalTitle: document.getElementById('bike-modal-title'),
 
   // Recuperación de sesión
   sessionRecoveryModal: document.getElementById('session-recovery-modal'),
@@ -212,6 +233,8 @@ function navigateTo(screenId) {
     loadSettingsScreen();
   } else if (screenId === 'sensors') {
     loadSensorsList();
+  } else if (screenId === 'bikes') {
+    loadBikesScreen();
   }
 }
 
@@ -834,6 +857,13 @@ function resetPillsUI() {
 
 // Intentar reconectar sensores previamente guardados
 function triggerSilentBluetoothReconnect() {
+  // Aplicar filtro de bici seleccionada
+  const bikeId = AppState.selectedBikeProfileId;
+  if (bikeId) {
+    const bike = AppState.bikeProfiles.find(b => b.id === bikeId);
+    BiciSensors.setBikeCadenceDevice(bike ? bike.cadenceDeviceId : null);
+  }
+
   BiciSensors.silentReconnect(
     (hrVal) => {
       AppState.activeRide.hr = hrVal;
@@ -1344,6 +1374,127 @@ function saveSensorAlias() {
   });
 }
 
+// --- GESTIÓN DE PERFILES DE BICICLETA (MULTI-BIKE) ---
+
+async function loadBikeProfiles() {
+  AppState.bikeProfiles = await DB.getAllBikeProfiles();
+  populateBikeSelector();
+}
+
+function populateBikeSelector() {
+  DOM.bikeProfileSelect.innerHTML = '<option value="">Sin bici asignada</option>';
+  AppState.bikeProfiles.forEach(bike => {
+    const icon = bike.type === 'mtb' ? '⛰️' : '🚴';
+    const option = document.createElement('option');
+    option.value = bike.id;
+    option.textContent = `${icon} ${bike.name}`;
+    if (bike.id === AppState.selectedBikeProfileId) option.selected = true;
+    DOM.bikeProfileSelect.appendChild(option);
+  });
+}
+
+async function loadBikesScreen() {
+  DOM.bikesCrudList.innerHTML = '';
+  AppState.bikeProfiles = await DB.getAllBikeProfiles();
+
+  if (AppState.bikeProfiles.length === 0) {
+    DOM.bikesCrudList.innerHTML = '<div class="empty-state">No tienes bicicletas registradas.</div>';
+    return;
+  }
+
+  AppState.bikeProfiles.forEach(bike => {
+    const item = document.createElement('div');
+    item.className = 'sensor-crud-item';
+    const icon = bike.type === 'mtb' ? '⛰️' : '🚴';
+    const typeLabel = bike.type === 'mtb' ? 'Montaña' : 'Ruta';
+
+    item.innerHTML = `
+      <div class="sensor-crud-info">
+        <span class="sensor-crud-icon" style="font-size: 24px;">${icon}</span>
+        <div class="sensor-crud-details">
+          <span class="sensor-crud-alias">${bike.name}</span>
+          <span class="sensor-crud-original">${typeLabel}${bike.cadenceDeviceId ? ' · Sensor cadencia vinculado' : ''}</span>
+        </div>
+      </div>
+      <div class="sensor-crud-actions">
+        <button class="sensor-action-btn-crud edit" data-bike-id="${bike.id}">✏️</button>
+        <button class="sensor-action-btn-crud delete" data-bike-id="${bike.id}">🗑️</button>
+      </div>
+    `;
+
+    item.querySelector('.edit').addEventListener('click', () => openBikeModal(bike));
+    item.querySelector('.delete').addEventListener('click', () => {
+      if (confirm(`¿Eliminar "${bike.name}"?`)) {
+        DB.deleteBikeProfile(bike.id).then(() => {
+          if (AppState.selectedBikeProfileId === bike.id) AppState.selectedBikeProfileId = null;
+          loadBikeProfiles();
+          loadBikesScreen();
+        });
+      }
+    });
+
+    DOM.bikesCrudList.appendChild(item);
+  });
+}
+
+async function openBikeModal(bike = null) {
+  DOM.bikeModalTitle.textContent = bike ? 'Editar Bicicleta' : 'Nueva Bicicleta';
+  DOM.bikeNameInput.value = bike ? bike.name : '';
+  DOM.bikeTypeSelect.value = bike ? bike.type : 'road';
+
+  const sensors = await DB.getAllSensors();
+  const cadenceSensors = sensors.filter(s => s.deviceType === 'cadence');
+  DOM.bikeCadenceSelect.innerHTML = '<option value="">Ninguno</option>';
+  cadenceSensors.forEach(s => {
+    const option = document.createElement('option');
+    option.value = s.deviceId;
+    option.textContent = s.customName || s.originalName;
+    if (bike && bike.cadenceDeviceId === s.deviceId) option.selected = true;
+    DOM.bikeCadenceSelect.appendChild(option);
+  });
+
+  DOM.bikeProfileModal.dataset.bikeId = bike ? bike.id : '';
+  DOM.bikeProfileModal.classList.remove('hide');
+  DOM.bikeNameInput.focus();
+}
+
+async function saveBikeProfileHandler() {
+  const name = DOM.bikeNameInput.value.trim();
+  if (!name) { alert('El nombre es obligatorio.'); return; }
+
+  const profile = {
+    name,
+    type: DOM.bikeTypeSelect.value,
+    cadenceDeviceId: DOM.bikeCadenceSelect.value || null
+  };
+
+  const bikeId = DOM.bikeProfileModal.dataset.bikeId;
+  if (bikeId) profile.id = parseInt(bikeId);
+
+  await DB.saveBikeProfile(profile);
+  DOM.bikeProfileModal.classList.add('hide');
+  await loadBikeProfiles();
+  loadBikesScreen();
+}
+
+async function forceUnpairAll() {
+  if (!confirm('⚠️ Esto eliminará TODOS los sensores guardados y los permisos Bluetooth del navegador.\n\nÚsalo solo si los sensores no se conectan correctamente.')) return;
+
+  await DB.clearUserSensors();
+  BiciSensors.disconnectAll();
+  resetPillsUI();
+
+  // Limpiar asociaciones de cadencia en perfiles de bici
+  for (const bike of AppState.bikeProfiles) {
+    bike.cadenceDeviceId = null;
+    await DB.saveBikeProfile(bike);
+  }
+
+  await loadBikeProfiles();
+  loadSensorsList();
+  alert('Todos los sensores han sido desemparejados. Reinicia la app para limpiar los permisos Bluetooth del sistema.');
+}
+
 // --- PIPELINE DE SINCRONIZACIÓN DE ACTIVIDADES ---
 
 // Registrar sincronización en segundo plano (PWA Background Sync)
@@ -1413,8 +1564,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Inicializar base de datos IndexedDB antes de cargar vistas y reconectar
   DB.init().then(() => {
     loadDashboardData();
+    loadBikeProfiles();
     triggerSilentBluetoothReconnect();
-    runActiveSync(); // Ejecutar sync al iniciar por si hay pendientes
+    runActiveSync();
   }).catch(err => {
     console.error("No se pudo iniciar IndexedDB. Cayendo en modo limitado.", err);
     loadDashboardData(); // Cargar con lo que haya
@@ -1439,6 +1591,21 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnDetailBack.addEventListener('click', () => navigateTo('dashboard'));
   DOM.btnGotoSensors.addEventListener('click', () => navigateTo('sensors'));
   DOM.btnSensorsBack.addEventListener('click', () => navigateTo('settings'));
+  DOM.btnGotoBikes.addEventListener('click', () => navigateTo('bikes'));
+  DOM.btnBikesBack.addEventListener('click', () => navigateTo('settings'));
+
+  // Selector de bici
+  DOM.bikeProfileSelect.addEventListener('change', () => {
+    const id = parseInt(DOM.bikeProfileSelect.value) || null;
+    AppState.selectedBikeProfileId = id;
+    const bike = AppState.bikeProfiles.find(b => b.id === id);
+    BiciSensors.setBikeCadenceDevice(bike ? bike.cadenceDeviceId : null);
+  });
+
+  DOM.btnBikeManage.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigateTo('bikes');
+  });
 
   // Iniciar Rodada
   DOM.btnStartRide.addEventListener('click', () => {
@@ -1490,6 +1657,12 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnAliasSave.addEventListener('click', () => {
     saveSensorAlias();
   });
+
+  // Gestión de Bicicletas
+  DOM.btnAddBike.addEventListener('click', () => openBikeModal(null));
+  DOM.btnBikeCancel.addEventListener('click', () => { DOM.bikeProfileModal.classList.add('hide'); });
+  DOM.btnBikeSave.addEventListener('click', () => saveBikeProfileHandler());
+  DOM.btnForceUnpair.addEventListener('click', () => forceUnpairAll());
 
   // Selector del Simulador
   DOM.chkSimulate.addEventListener('change', (e) => {

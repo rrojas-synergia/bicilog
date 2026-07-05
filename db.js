@@ -1,7 +1,7 @@
 // db.js - Persistencia Asíncrona Estructurada en IndexedDB para BiciLog (Offline-First)
 
 const DB_NAME = 'BiciLogDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbInstance = null;
 
@@ -16,19 +16,20 @@ export const DB = {
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
 
-        // 1. Almacén de Rodadas (Rides)
         if (!db.objectStoreNames.contains('rides')) {
           const rideStore = db.createObjectStore('rides', { keyPath: 'timestamp' });
-          // Índice para buscar rápidamente rodadas pendientes de sincronización
           rideStore.createIndex('sync_status', 'sync_status', { unique: false });
         }
 
-        // 2. Almacén de Sensores del Usuario (User Sensors)
         if (!db.objectStoreNames.contains('user_sensors')) {
           db.createObjectStore('user_sensors', { keyPath: 'deviceId' });
         }
 
-        console.log('[IndexedDB] Estructura de base de datos creada/actualizada.');
+        if (!db.objectStoreNames.contains('bike_profiles')) {
+          db.createObjectStore('bike_profiles', { keyPath: 'id', autoIncrement: true });
+        }
+
+        console.log('[IndexedDB] Estructura de base de datos creada/actualizada (v' + DB_VERSION + ').');
       };
 
       request.onsuccess = (event) => {
@@ -185,5 +186,71 @@ export const DB = {
       request.onsuccess = () => resolve(true);
       request.onerror = (e) => reject(e.target.error);
     });
+  },
+
+  async clearUserSensors() {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['user_sensors'], 'readwrite');
+      const store = transaction.objectStore('user_sensors');
+      const request = store.clear();
+
+      request.onsuccess = () => resolve(true);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  },
+
+  // --- CRUD PARA PERFILES DE BICICLETA (BIKE_PROFILES) ---
+
+  async saveBikeProfile(profile) {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['bike_profiles'], 'readwrite');
+      const store = transaction.objectStore('bike_profiles');
+      const record = {
+        name: profile.name || 'Mi Bicicleta',
+        type: profile.type || 'road',
+        cadenceDeviceId: profile.cadenceDeviceId || null,
+        powerDeviceId: profile.powerDeviceId || null,
+        ...(profile.id ? { id: profile.id } : {})
+      };
+      const request = store.put(record);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  },
+
+  async getAllBikeProfiles() {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['bike_profiles'], 'readonly');
+      const store = transaction.objectStore('bike_profiles');
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  },
+
+  async getBikeProfile(id) {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['bike_profiles'], 'readonly');
+      const store = transaction.objectStore('bike_profiles');
+      const request = store.get(id);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  },
+
+  async deleteBikeProfile(id) {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['bike_profiles'], 'readwrite');
+      const store = transaction.objectStore('bike_profiles');
+      const request = store.delete(id);
+      request.onsuccess = () => resolve(true);
+      request.onerror = (e) => reject(e.target.error);
+    });
   }
+
 };

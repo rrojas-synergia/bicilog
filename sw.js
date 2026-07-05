@@ -1,6 +1,6 @@
 // sw.js - Service Worker con Soporte Offline y Background Sync Autónomo para BiciLog
 
-const CACHE_NAME = 'bicilog-v3';
+const CACHE_NAME = 'bicilog-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -80,7 +80,7 @@ self.addEventListener('sync', (event) => {
 // Abrir la base de datos de forma asíncrona dentro del Worker
 function openDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('BiciLogDB', 1);
+    const request = indexedDB.open('BiciLogDB', 2);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });

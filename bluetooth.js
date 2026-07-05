@@ -26,6 +26,13 @@ export const BiciSensors = {
   lastCrankRevolutions: -1,
   lastCrankEventTime: -1,
 
+  // Filtro de bici: solo conectar al sensor de cadencia vinculado al perfil seleccionado
+  allowedCadenceDeviceId: null,
+
+  setBikeCadenceDevice(deviceId) {
+    this.allowedCadenceDeviceId = deviceId || null;
+  },
+
   // Verificar si Bluetooth está soportado
   checkBluetoothSupport() {
     if (!navigator.bluetooth) {
@@ -317,6 +324,11 @@ export const BiciSensors = {
         } 
         
         else if (sensorInfo.deviceType === 'cadence' && !this.isCscConnected) {
+          // Filtrar por sensor vinculado a la bici seleccionada, si existe
+          if (this.allowedCadenceDeviceId && device.id !== this.allowedCadenceDeviceId) {
+            console.log(`[BLE] Saltando cadencia ${sensorInfo.customName}: no pertenece a la bici seleccionada.`);
+            continue;
+          }
           this.updateStatus('cadence', 'connecting', sensorInfo.customName);
           
           this.cscDevice = device;
