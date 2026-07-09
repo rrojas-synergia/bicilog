@@ -220,5 +220,141 @@ export const BiciCharts = {
     parts.push(secs.toString().padStart(2, '0'));
     
     return parts.join(':');
+  },
+
+  // --- GRÁFICOS INDIVIDUALES (TAB CHARTS) ---
+
+  _buildSvgChart(dataPoints, label, color, getValue, getMax, height) {
+    const width = 380;
+    const H = height || 130;
+    const pad = 20;
+
+    let pts = [];
+    const maxVal = getMax(dataPoints) || 10;
+    const stepX = Math.max((width - pad * 2) / (dataPoints.length - 1 || 1), 0.5);
+
+    dataPoints.forEach((p, i) => {
+      const x = pad + i * stepX;
+      const v = getValue(p);
+      const y = H - pad - (v / maxVal) * (H - pad * 2);
+      pts.push(`${x},${y}`);
+    });
+
+    const pathD = `M ${pts.join(' L ')}`;
+    const areaD = `${pathD} L ${pad + (dataPoints.length - 1) * stepX},${H - pad} L ${pad},${H - pad} Z`;
+
+    return `<svg width="100%" height="${H}" viewBox="0 0 ${width} ${H}" style="overflow: visible;">
+      <defs>
+        <linearGradient id="gr-${label}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.45"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0.05"/>
+        </linearGradient>
+      </defs>
+      <path d="${areaD}" fill="url(#gr-${label})" />
+      <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" />
+      <line x1="${pad}" y1="${H - pad}" x2="${width - pad}" y2="${H - pad}" stroke="#E4E7EB" stroke-width="1" />
+      <text x="${pad}" y="${H - 4}" fill="#A4B0BE" font-size="9" font-weight="600">Inicio</text>
+      <text x="${width - pad - 20}" y="${H - 4}" fill="#A4B0BE" font-size="9" font-weight="600">Fin</text>
+      <text x="${pad}" y="${pad - 4}" fill="${color}" font-size="9" font-weight="700">Máx: ${maxVal.toFixed(0)}</text>
+    </svg>`;
+  },
+
+  renderElevationChart(containerId, dataPoints) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    if (!dataPoints || dataPoints.length < 2) {
+      container.innerHTML = '<div style="text-align:center;color:#A4B0BE;padding:20px;">Sin datos de altitud.</div>';
+      return;
+    }
+    const valid = dataPoints.filter(p => p.lat !== undefined);
+    if (valid.length < 2) {
+      container.innerHTML = '<div style="text-align:center;color:#A4B0BE;padding:20px;">Sin datos de altitud.</div>';
+      return;
+    }
+    const baseAlt = valid[0].alt || 0;
+    container.innerHTML = this._buildSvgChart(
+      valid, 'elev', '#1DD1A1',
+      p => ((p.alt || baseAlt) - baseAlt) + 10,
+      pts => Math.max(...pts.map(p => ((p.alt || baseAlt) - baseAlt) + 10), 20)
+    );
+  },
+
+  renderSpeedChart(containerId, dataPoints) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    if (!dataPoints || dataPoints.length < 2) {
+      container.innerHTML = '<div style="text-align:center;color:#A4B0BE;padding:20px;">Sin datos de velocidad.</div>';
+      return;
+    }
+    container.innerHTML = this._buildSvgChart(
+      dataPoints, 'spd', '#0080FF',
+      p => p.speed || 0,
+      pts => Math.max(...pts.map(p => p.speed || 0), 10)
+    );
+  },
+
+  renderHrChart(containerId, dataPoints, hrZones) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    if (!dataPoints || dataPoints.length < 2) {
+      container.innerHTML = '<div style="text-align:center;color:#A4B0BE;padding:20px;">Sin datos de FC.</div>';
+      return;
+    }
+    const valid = dataPoints.filter(p => (p.hr || 0) > 0);
+    if (valid.length < 2) {
+      container.innerHTML = '<div style="text-align:center;color:#A4B0BE;padding:20px;">Sin datos de FC.</div>';
+      return;
+    }
+    const maxHR = Math.max(...valid.map(p => p.hr || 0), 100);
+    const width = 380, H = 130, pad = 20;
+    const stepX = Math.max((width - pad * 2) / (valid.length - 1), 0.5);
+    let pts = [];
+    valid.forEach((p, i) => {
+      const x = pad + i * stepX;
+      const y = H - pad - ((p.hr || 0) / maxHR) * (H - pad * 2);
+      pts.push(`${x},${y}`);
+    });
+    const pathD = `M ${pts.join(' L ')}`;
+    const areaD = `${pathD} L ${pad + (valid.length - 1) * stepX},${H - pad} L ${pad},${H - pad} Z`;
+
+    // Línea umbral Z4
+    const z4min = (hrZones && hrZones.z4) ? hrZones.z4.min : Math.round(220 * 0.8);
+    const z4y = H - pad - (z4min / maxHR) * (H - pad * 2);
+
+    container.innerHTML = `<svg width="100%" height="${H}" viewBox="0 0 ${width} ${H}" style="overflow: visible;">
+      <defs>
+        <linearGradient id="gr-hr" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#FF6B6B" stop-opacity="0.45"/>
+          <stop offset="100%" stop-color="#FF6B6B" stop-opacity="0.05"/>
+        </linearGradient>
+      </defs>
+      <path d="${areaD}" fill="url(#gr-hr)" />
+      <path d="${pathD}" fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round" />
+      <line x1="${pad}" y1="${z4y}" x2="${width - pad}" y2="${z4y}" stroke="#FF9F43" stroke-width="1.5" stroke-dasharray="6,4" />
+      <text x="${width - pad - 35}" y="${z4y - 6}" fill="#FF9F43" font-size="8" font-weight="700">Z4: ${z4min} BPM</text>
+      <line x1="${pad}" y1="${H - pad}" x2="${width - pad}" y2="${H - pad}" stroke="#E4E7EB" stroke-width="1" />
+      <text x="${pad}" y="${H - 4}" fill="#A4B0BE" font-size="9" font-weight="600">Inicio</text>
+      <text x="${width - pad - 20}" y="${H - 4}" fill="#A4B0BE" font-size="9" font-weight="600">Fin</text>
+      <text x="${pad}" y="${pad - 4}" fill="#FF6B6B" font-size="9" font-weight="700">Máx: ${Math.round(maxHR)} BPM</text>
+    </svg>`;
+  },
+
+  renderCadenceChart(containerId, dataPoints) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    if (!dataPoints || dataPoints.length < 2) {
+      container.innerHTML = '<div style="text-align:center;color:#A4B0BE;padding:20px;">Sin datos de cadencia.</div>';
+      return;
+    }
+    container.innerHTML = this._buildSvgChart(
+      dataPoints, 'cad', '#FF9F43',
+      p => p.cadence || 0,
+      pts => Math.max(...pts.map(p => p.cadence || 0), 10)
+    );
   }
+
 };

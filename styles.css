@@ -741,7 +741,94 @@ input:checked + .slider:before {
 
 /* --- PANTALLA 3: DETALLE DE RODADA --- */
 
-.ride-detail-hero {
+/* Tab Navigation */
+.detail-tabs {
+  display: flex;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 16px;
+  gap: 4px;
+}
+
+.detail-tab {
+  flex: 1;
+  height: 44px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sport);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+}
+
+.detail-tab.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.detail-tab-panel {
+  display: none;
+}
+
+.detail-tab-panel.active {
+  display: block;
+}
+
+/* High-contrast metric for HR/Cadence (solid black under sunlight) */
+.metric-hi-contrast {
+  color: #000 !important;
+  -webkit-text-fill-color: #000;
+}
+
+/* Stats sections (Estadísticas tab) */
+.stats-section {
+  background: var(--bg-card);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  border: 1px solid var(--color-border);
+}
+
+.stats-section-title {
+  font-family: var(--font-sport);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-accent);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stats-data-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.stats-data-row:last-child {
+  border-bottom: none;
+}
+
+.stats-data-row span:first-child {
+  color: var(--text-muted);
+}
+
+.stats-data-row span:last-child {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* Chart wrappers */
+.chart-wrapper {
+  width: 100%;
+  overflow: visible;
+}
   background-color: var(--bg-card);
   border-radius: 20px;
   padding: 20px;

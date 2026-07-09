@@ -6,7 +6,7 @@ import { BiciSensors } from './bluetooth.js';
 import { BiciGPS } from './gps.js';
 import { BiciCharts } from './charts.js';
 
-const APP_VERSION = "0.0.3";
+const APP_VERSION = "0.0.4";
 
 // --- ESTADO GLOBAL DE LA APLICACIÓN ---
 const AppState = {
@@ -96,12 +96,15 @@ const DOM = {
   liveDistance: document.getElementById('live-distance'),
   liveHr: document.getElementById('live-hr'),
   liveHrZone: document.getElementById('live-hr-zone'),
+  hrMetricBox: document.getElementById('hr-metric-box'),
   liveCadence: document.getElementById('live-cadence'),
   liveAscent: document.getElementById('live-ascent'),
   liveWatts: document.getElementById('live-watts'),
   liveGrade: document.getElementById('live-grade'),
   liveRespiration: document.getElementById('live-respiration'),
   liveTemp: document.getElementById('live-temp'),
+  liveClock: document.getElementById('live-clock'),
+  liveMovingTime: document.getElementById('live-moving-time'),
   chkSimulate: document.getElementById('chk-simulate-data'),
   btnPauseRide: document.getElementById('btn-pause-ride'),
   btnResumeRide: document.getElementById('btn-resume-ride'),
@@ -134,6 +137,27 @@ const DOM = {
   detailHrZonesChart: document.getElementById('detail-hr-zones-chart'),
   btnDetailBack: document.getElementById('btn-detail-back'),
   btnDeleteRide: document.getElementById('btn-delete-ride'),
+
+  // Tabs de detalle
+  detailTabPanelSummary: document.getElementById('detail-tab-summary'),
+  detailTabPanelStats: document.getElementById('detail-tab-stats'),
+  detailTabPanelCharts: document.getElementById('detail-tab-charts'),
+  detailChartElevation: document.getElementById('detail-chart-elevation'),
+  detailChartSpeed: document.getElementById('detail-chart-speed'),
+  detailChartHr: document.getElementById('detail-chart-hr'),
+  detailChartCadence: document.getElementById('detail-chart-cadence'),
+  statsSpeedAvg: document.getElementById('stats-speed-avg'),
+  statsSpeedMax: document.getElementById('stats-speed-max'),
+  statsHrAvg: document.getElementById('stats-hr-avg'),
+  statsHrMax: document.getElementById('stats-hr-max'),
+  statsElevAscent: document.getElementById('stats-elev-ascent'),
+  statsElevMin: document.getElementById('stats-elev-min'),
+  statsElevMax: document.getElementById('stats-elev-max'),
+  statsCadAvg: document.getElementById('stats-cad-avg'),
+  statsCadMax: document.getElementById('stats-cad-max'),
+  statsTimeTotal: document.getElementById('stats-time-total'),
+  statsTimeMoving: document.getElementById('stats-time-moving'),
+  chartsRendered: false,
 
   // Ajustes
   settingsForm: document.getElementById('settings-form'),
@@ -217,6 +241,11 @@ function updateGpsAccuracyUI(accuracy) {
   const m = Math.round(accuracy);
   DOM.gpsAccuracy.textContent = `GPS: ${m}m`;
   DOM.gpsAccuracy.style.color = m < 30 ? 'var(--color-success)' : '#FF9F43';
+}
+
+function updateLiveClock() {
+  const now = new Date();
+  DOM.liveClock.textContent = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 }
 
 // --- NAVEGACIÓN SPA ---
@@ -317,31 +346,70 @@ function renderRecentRidesList() {
   });
 }
 
-// Ver Detalle de Rodada
+// Ver Detalle de Rodada (Tabbed: Resumen | Estadísticas | Gráficos)
 function openRideDetail(ride) {
   AppState.selectedRide = ride;
-  
+
   DOM.detailTitle.textContent = ride.title;
   const date = new Date(ride.timestamp);
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
   DOM.detailDate.textContent = date.toLocaleDateString('es-ES', options);
 
+  // Summary tab
   DOM.detailValDistance.textContent = ride.distance.toFixed(2);
   DOM.detailValTime.textContent = BiciCharts.formatDuration(ride.duration);
   DOM.detailValSpeed.textContent = ride.avgSpeed.toFixed(1);
   DOM.detailValAscent.textContent = Math.round(ride.ascent);
   DOM.detailValHr.textContent = ride.avgHr > 0 ? Math.round(ride.avgHr) : '--';
   DOM.detailValCadence.textContent = ride.avgCadence > 0 ? Math.round(ride.avgCadence) : '--';
-  DOM.detailValRespiration.textContent = ride.avgRespiration > 0 ? Math.round(ride.avgRespiration) : '--';
-  DOM.detailValTemp.textContent = ride.avgTemp ? Math.round(ride.avgTemp) : '22';
+
+  // Stats tab
+  const samples = ride.samples || [];
+  const speeds = samples.map(s => s.speed).filter(v => v > 0);
+  const hrs = samples.map(s => s.hr).filter(v => v > 0);
+  const cads = samples.map(s => s.cadence).filter(v => v > 0);
+  const alts = samples.filter(s => s.lat !== undefined);
+
+  DOM.statsSpeedAvg.textContent = ride.avgSpeed.toFixed(1) + ' km/h';
+  DOM.statsSpeedMax.textContent = (speeds.length ? Math.max(...speeds).toFixed(1) : '0.0') + ' km/h';
+  DOM.statsHrAvg.textContent = (ride.avgHr > 0 ? Math.round(ride.avgHr) : '--') + ' BPM';
+  DOM.statsHrMax.textContent = (hrs.length ? Math.round(Math.max(...hrs)) : '--') + ' BPM';
+  DOM.statsElevAscent.textContent = Math.round(ride.ascent) + ' m';
+  DOM.statsElevMin.textContent = 'N/D';
+  DOM.statsElevMax.textContent = 'N/D';
+  DOM.statsCadAvg.textContent = (ride.avgCadence > 0 ? Math.round(ride.avgCadence) : '--') + ' RPM';
+  DOM.statsCadMax.textContent = (cads.length ? Math.round(Math.max(...cads)) : '--') + ' RPM';
+  DOM.statsTimeTotal.textContent = BiciCharts.formatDuration(ride.duration);
+  DOM.statsTimeMoving.textContent = BiciCharts.formatDuration(ride.movingTime || 0);
+  DOM.chartsRendered = false;
+
+  // Reset tabs to Summary
+  document.querySelectorAll('.detail-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  DOM.detailTabPanelSummary.classList.add('active');
+  DOM.detailTabPanelStats.classList.remove('active');
+  DOM.detailTabPanelCharts.classList.remove('active');
 
   navigateTo('detail');
-  
-  setTimeout(() => {
-    BiciCharts.renderHRZones('detail-hr-zones-chart', ride.zoneTimes, ride.duration);
-    BiciCharts.renderRideProfile('detail-ride-profile-chart', ride.samples);
-    initDetailMap(ride);
-  }, 100);
+
+  BiciCharts.renderHRZones('detail-hr-zones-chart', ride.zoneTimes, ride.duration);
+  setTimeout(() => initDetailMap(ride), 100);
+}
+
+function switchDetailTab(tabName) {
+  DOM.detailTabPanelSummary.classList.toggle('active', tabName === 'summary');
+  DOM.detailTabPanelStats.classList.toggle('active', tabName === 'stats');
+  DOM.detailTabPanelCharts.classList.toggle('active', tabName === 'charts');
+
+  if (tabName === 'charts' && !DOM.chartsRendered) {
+    const ride = AppState.selectedRide;
+    if (ride && ride.samples) {
+      BiciCharts.renderElevationChart('detail-chart-elevation', ride.samples);
+      BiciCharts.renderSpeedChart('detail-chart-speed', ride.samples);
+      BiciCharts.renderHrChart('detail-chart-hr', ride.samples, AppState.hrZones);
+      BiciCharts.renderCadenceChart('detail-chart-cadence', ride.samples);
+      DOM.chartsRendered = true;
+    }
+  }
 }
 
 // Cargar Ajustes
@@ -548,6 +616,7 @@ function startWorkout() {
   DOM.liveSpeed.textContent = '0.0';
   DOM.liveDistance.textContent = '0.00';
   DOM.liveTimer.textContent = '00:00:00';
+  DOM.liveMovingTime.textContent = '00:00';
   DOM.liveHr.textContent = '--';
   DOM.liveHrZone.textContent = '--';
   DOM.liveHrZone.className = 'hr-zone-tag hide';
@@ -557,6 +626,8 @@ function startWorkout() {
   DOM.liveGrade.textContent = '0%';
   DOM.liveRespiration.textContent = '--';
   DOM.liveTemp.textContent = '22';
+  DOM.hrMetricBox.style.borderLeft = '6px solid var(--color-border)';
+  updateLiveClock();
 
   DOM.btnPauseRide.classList.remove('hide');
   DOM.btnResumeRide.classList.add('hide');
@@ -606,12 +677,22 @@ function startWorkout() {
     if (isRunning) {
       AppState.activeRide.elapsedSeconds++;
       DOM.liveTimer.textContent = BiciCharts.formatDuration(AppState.activeRide.elapsedSeconds);
+
+      if (AppState.activeRide.speed > 2) {
+        AppState.activeRide.movingTimeSeconds = (AppState.activeRide.movingTimeSeconds || 0) + 1;
+      }
+      DOM.liveMovingTime.textContent = BiciCharts.formatDuration(AppState.activeRide.movingTimeSeconds || 0);
+
+      updateLiveClock();
       
       if (AppState.activeRide.hr > 0) {
         const zoneNum = Storage.getZoneForHR(AppState.activeRide.hr, AppState.hrZones);
         if (zoneNum > 0) {
           AppState.activeRide.zoneTimes[`z${zoneNum}`]++;
         }
+        DOM.hrMetricBox.style.borderLeft = `6px solid ${BiciCharts.ZONE_COLORS[`z${zoneNum}`]}`;
+      } else {
+        DOM.hrMetricBox.style.borderLeft = '6px solid var(--color-border)';
       }
 
       // Guardar en caliente cada segundo
@@ -1590,6 +1671,15 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnSettingsBack.addEventListener('click', () => navigateTo('dashboard'));
   DOM.btnDetailBack.addEventListener('click', () => navigateTo('dashboard'));
   DOM.btnGotoSensors.addEventListener('click', () => navigateTo('sensors'));
+
+  // Tab navigation en detalle
+  document.querySelectorAll('.detail-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      switchDetailTab(tab.dataset.tab);
+    });
+  });
   DOM.btnSensorsBack.addEventListener('click', () => navigateTo('settings'));
   DOM.btnGotoBikes.addEventListener('click', () => navigateTo('bikes'));
   DOM.btnBikesBack.addEventListener('click', () => navigateTo('settings'));

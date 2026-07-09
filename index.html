@@ -30,7 +30,7 @@
       <header class="app-header">
         <div class="header-left">
           <span class="app-logo">Bici<span class="highlight">Log</span></span>
-          <span class="version-badge">v0.0.3</span>
+          <span class="version-badge">v0.0.4</span>
         </div>
         <button id="btn-open-settings" class="icon-button" aria-label="Ajustes">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -169,17 +169,17 @@
             <span class="metric-sub-unit">m</span>
           </div>
           <!-- Frecuencia Cardíaca -->
-          <div class="metric-box hr-metric">
+          <div class="metric-box hr-metric" id="hr-metric-box">
             <span class="metric-icon">❤️</span>
             <span class="metric-label">Frec. Cardíaca</span>
-            <span id="live-hr" class="metric-value">--</span>
+            <span id="live-hr" class="metric-value metric-hi-contrast">--</span>
             <span class="metric-sub-unit">BPM <span id="live-hr-zone" class="hr-zone-tag">--</span></span>
           </div>
           <!-- Cadencia -->
           <div class="metric-box cad-metric">
             <span class="metric-icon">⚙️</span>
             <span class="metric-label">Cadencia</span>
-            <span id="live-cadence" class="metric-value">--</span>
+            <span id="live-cadence" class="metric-value metric-hi-contrast">--</span>
             <span class="metric-sub-unit">RPM</span>
           </div>
           <!-- Potencia Estimada (Watts) -->
@@ -209,6 +209,20 @@
             <span class="metric-label">Temperatura</span>
             <span id="live-temp" class="metric-value">22</span>
             <span class="metric-sub-unit">°C</span>
+          </div>
+          <!-- Reloj (Hora del día) -->
+          <div class="metric-box">
+            <span class="metric-icon">🕐</span>
+            <span class="metric-label">Hora</span>
+            <span id="live-clock" class="metric-value">--:--</span>
+            <span class="metric-sub-unit">Actual</span>
+          </div>
+          <!-- Tiempo en Movimiento -->
+          <div class="metric-box">
+            <span class="metric-icon">⏱️</span>
+            <span class="metric-label">En Movimiento</span>
+            <span id="live-moving-time" class="metric-value">00:00</span>
+            <span class="metric-sub-unit">Pedaleo activo</span>
           </div>
         </div>
 
@@ -248,66 +262,106 @@
         </button>
       </header>
 
+      <!-- Tabs de navegación de detalle -->
+      <nav class="detail-tabs">
+        <button class="detail-tab active" data-tab="summary">Resumen</button>
+        <button class="detail-tab" data-tab="stats">Estadísticas</button>
+        <button class="detail-tab" data-tab="charts">Gráficos</button>
+      </nav>
+
       <main class="screen-content">
-        <div class="ride-detail-hero">
-          <h2 id="detail-title" class="detail-ride-title">Rodada Matutina</h2>
-          <span id="detail-date" class="detail-ride-date">Domingo, 7 de junio de 2026</span>
-        </div>
+        <!-- TAB: Resumen -->
+        <div id="detail-tab-summary" class="detail-tab-panel active">
+          <div class="ride-detail-hero">
+            <h2 id="detail-title" class="detail-ride-title">Rodada Matutina</h2>
+            <span id="detail-date" class="detail-ride-date">Domingo, 7 de junio de 2026</span>
+          </div>
 
-        <!-- Cuadrícula de Totales -->
-        <div class="detail-stats-grid">
-          <div class="detail-stat-card">
-            <span class="val" id="detail-val-distance">0.00</span>
-            <span class="lbl">Kilómetros</span>
+          <div class="detail-stats-grid">
+            <div class="detail-stat-card">
+              <span class="val" id="detail-val-distance">0.00</span>
+              <span class="lbl">Kilómetros</span>
+            </div>
+            <div class="detail-stat-card">
+              <span class="val" id="detail-val-time">00:00:00</span>
+              <span class="lbl">Tiempo Total</span>
+            </div>
+            <div class="detail-stat-card">
+              <span class="val" id="detail-val-speed">0.0</span>
+              <span class="lbl">Velocidad Prom (km/h)</span>
+            </div>
+            <div class="detail-stat-card">
+              <span class="val" id="detail-val-ascent">0</span>
+              <span class="lbl">Ascenso (m)</span>
+            </div>
+            <div class="detail-stat-card">
+              <span class="val" id="detail-val-hr">0</span>
+              <span class="lbl">FC Promedio</span>
+            </div>
+            <div class="detail-stat-card">
+              <span class="val" id="detail-val-cadence">0</span>
+              <span class="lbl">Cadencia Prom</span>
+            </div>
           </div>
-          <div class="detail-stat-card">
-            <span class="val" id="detail-val-time">00:00:00</span>
-            <span class="lbl">Tiempo Total</span>
-          </div>
-          <div class="detail-stat-card">
-            <span class="val" id="detail-val-speed">0.0</span>
-            <span class="lbl">Velocidad Prom (km/h)</span>
-          </div>
-          <div class="detail-stat-card">
-            <span class="val" id="detail-val-ascent">0</span>
-            <span class="lbl">Ascenso (m)</span>
-          </div>
-          <div class="detail-stat-card">
-            <span class="val" id="detail-val-hr">0</span>
-            <span class="lbl">FC Promedio</span>
-          </div>
-          <div class="detail-stat-card">
-            <span class="val" id="detail-val-cadence">0</span>
-            <span class="lbl">Cadencia Prom</span>
-          </div>
-          <div class="detail-stat-card">
-            <span class="val" id="detail-val-respiration">0</span>
-            <span class="lbl">Resp. Prom (RPM)</span>
-          </div>
-          <div class="detail-stat-card">
-            <span class="val" id="detail-val-temp">0</span>
-            <span class="lbl">Temp Prom (°C)</span>
-          </div>
-        </div>
 
-        <!-- Mapa de la Ruta Realizada -->
-        <div class="section-card" style="padding: 0; overflow: hidden; height: 200px; margin-bottom: 20px; border: 1px solid var(--color-border);">
-          <div id="detail-map" style="height: 100%; width: 100%;"></div>
-        </div>
-
-        <!-- Perfil del Gráfico de Línea -->
-        <div class="section-card">
-          <h3 class="card-title">Perfil de Rodada (FC vs Velocidad)</h3>
-          <div id="detail-ride-profile-chart" class="chart-wrapper">
-            <!-- SVG Dinámico -->
+          <div class="section-card" style="padding: 0; overflow: hidden; height: 200px; margin-bottom: 20px; border: 1px solid var(--color-border);">
+            <div id="detail-map" style="height: 100%; width: 100%;"></div>
           </div>
         </div>
 
-        <!-- Distribución de Zonas de FC -->
-        <div class="section-card">
-          <h3 class="card-title">Zonas de Frecuencia Cardíaca</h3>
-          <div id="detail-hr-zones-chart">
-            <!-- Barras generadas por JS -->
+        <!-- TAB: Estadísticas -->
+        <div id="detail-tab-stats" class="detail-tab-panel">
+          <div class="stats-section">
+            <h3 class="stats-section-title">Velocidad</h3>
+            <div class="stats-data-row"><span>Promedio</span><span id="stats-speed-avg">0.0 km/h</span></div>
+            <div class="stats-data-row"><span>Máxima</span><span id="stats-speed-max">0.0 km/h</span></div>
+          </div>
+          <div class="stats-section">
+            <h3 class="stats-section-title">Frecuencia Cardíaca</h3>
+            <div class="stats-data-row"><span>Promedio</span><span id="stats-hr-avg">0 BPM</span></div>
+            <div class="stats-data-row"><span>Máxima</span><span id="stats-hr-max">0 BPM</span></div>
+          </div>
+          <div class="stats-section">
+            <h3 class="stats-section-title">Elevación</h3>
+            <div class="stats-data-row"><span>Ascenso total</span><span id="stats-elev-ascent">0 m</span></div>
+            <div class="stats-data-row"><span>Altitud mínima</span><span id="stats-elev-min">0 m</span></div>
+            <div class="stats-data-row"><span>Altitud máxima</span><span id="stats-elev-max">0 m</span></div>
+          </div>
+          <div class="stats-section">
+            <h3 class="stats-section-title">Cadencia</h3>
+            <div class="stats-data-row"><span>Promedio</span><span id="stats-cad-avg">0 RPM</span></div>
+            <div class="stats-data-row"><span>Máxima</span><span id="stats-cad-max">0 RPM</span></div>
+          </div>
+          <div class="stats-section">
+            <h3 class="stats-section-title">Tiempo</h3>
+            <div class="stats-data-row"><span>Total</span><span id="stats-time-total">00:00</span></div>
+            <div class="stats-data-row"><span>En movimiento</span><span id="stats-time-moving">00:00</span></div>
+          </div>
+          <div class="stats-section">
+            <h3 class="stats-section-title">Tiempo en Zonas FC</h3>
+            <div id="detail-hr-zones-chart">
+              <!-- Barras generadas por JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: Gráficos -->
+        <div id="detail-tab-charts" class="detail-tab-panel">
+          <div class="section-card">
+            <h3 class="card-title">Elevación vs Tiempo</h3>
+            <div id="detail-chart-elevation" class="chart-wrapper" style="min-height: 130px;"></div>
+          </div>
+          <div class="section-card">
+            <h3 class="card-title">Velocidad vs Tiempo</h3>
+            <div id="detail-chart-speed" class="chart-wrapper" style="min-height: 130px;"></div>
+          </div>
+          <div class="section-card">
+            <h3 class="card-title">Frecuencia Cardíaca vs Tiempo</h3>
+            <div id="detail-chart-hr" class="chart-wrapper" style="min-height: 130px;"></div>
+          </div>
+          <div class="section-card">
+            <h3 class="card-title">Cadencia vs Tiempo</h3>
+            <div id="detail-chart-cadence" class="chart-wrapper" style="min-height: 130px;"></div>
           </div>
         </div>
       </main>
