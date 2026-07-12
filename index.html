@@ -30,7 +30,7 @@
       <header class="app-header">
         <div class="header-left">
           <span class="app-logo">Bici<span class="highlight">Log</span></span>
-          <span class="version-badge">v0.0.4</span>
+          <span class="version-badge">v0.0.5</span>
         </div>
         <button id="btn-open-settings" class="icon-button" aria-label="Ajustes">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -600,6 +600,20 @@
         <button id="btn-bike-cancel" class="modal-btn secondary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--bg-primary); color: var(--text-main); font-weight: 700; cursor: pointer;">Cancelar</button>
         <button id="btn-bike-save" class="modal-btn primary-btn" style="flex: 1; height: 44px; border-radius: 12px; border: none; background: #11caa0; color: white; font-weight: 700; cursor: pointer;">Guardar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- SOS Crash Detection Overlay -->
+  <div id="sos-overlay" class="sos-overlay hide">
+    <div class="sos-content">
+      <div class="sos-icon">🚨</div>
+      <h2 class="sos-title">¿Todo bien?</h2>
+      <p class="sos-subtitle">Posible caída detectada. Si no cancelas, enviaremos una alerta de emergencia.</p>
+      <div class="sos-countdown-ring">
+        <span id="sos-countdown" class="sos-countdown-num">15</span>
+        <span class="sos-countdown-label">segundos</span>
+      </div>
+      <button id="sos-btn-cancel" class="sos-cancel-btn">ESTOY BIEN — CANCELAR</button>
     </div>
   </div>
 

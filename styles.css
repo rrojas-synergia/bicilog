@@ -1219,4 +1219,111 @@ input:checked + .slider:before {
   color: white;
 }
 
+/* --- SOS CRASH DETECTION OVERLAY --- */
+
+.sos-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+  backdrop-filter: blur(8px);
+  padding: 20px;
+  animation: sosPulse 0.5s ease-out;
+}
+
+@keyframes sosPulse {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sos-content {
+  text-align: center;
+  max-width: 340px;
+  width: 100%;
+}
+
+.sos-icon {
+  font-size: 72px;
+  margin-bottom: 12px;
+  animation: sosBounce 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes sosBounce {
+  from { transform: scale(1); }
+  to { transform: scale(1.12); }
+}
+
+.sos-title {
+  font-family: var(--font-sport);
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.sos-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.sos-countdown-ring {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 6px solid var(--color-danger);
+  margin: 0 auto 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: sosRingPulse 1s ease-in-out infinite;
+}
+
+@keyframes sosRingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.5); }
+  50% { box-shadow: 0 0 0 20px rgba(255, 107, 107, 0); }
+}
+
+.sos-countdown-num {
+  font-family: var(--font-sport);
+  font-size: 42px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+}
+
+.sos-countdown-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.sos-cancel-btn {
+  width: 100%;
+  height: 56px;
+  border-radius: 16px;
+  border: none;
+  background: var(--color-success);
+  color: #fff;
+  font-family: var(--font-sport);
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(29, 209, 161, 0.4);
+  transition: transform 0.15s;
+}
+
+.sos-cancel-btn:active {
+  transform: scale(0.96);
+}
+
 

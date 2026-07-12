@@ -5,8 +5,10 @@ import { DB } from './db.js'; // Base de datos IndexedDB
 import { BiciSensors } from './bluetooth.js';
 import { BiciGPS } from './gps.js';
 import { BiciCharts } from './charts.js';
+import { FBAuth, saveRideToFirestore } from './firebase.js';
+import { CrashDetector } from './crash-detector.js';
 
-const APP_VERSION = "0.0.4";
+const APP_VERSION = "0.0.5";
 
 // --- ESTADO GLOBAL DE LA APLICACIÓN ---
 const AppState = {
@@ -61,7 +63,12 @@ const AppState = {
 
   // Bicicletas
   bikeProfiles: [],
-  selectedBikeProfileId: null
+  selectedBikeProfileId: null,
+
+  // SOS / Crash Detection
+  sosCountdown: 0,
+  sosInterval: null,
+  sosAudioCtx: null
 };
 
 // --- SELECTORES DOM ---
@@ -194,6 +201,11 @@ const DOM = {
   btnBikeCancel: document.getElementById('btn-bike-cancel'),
   btnBikeSave: document.getElementById('btn-bike-save'),
   bikeModalTitle: document.getElementById('bike-modal-title'),
+
+  // SOS Crash Detection
+  sosOverlay: document.getElementById('sos-overlay'),
+  sosCountdownEl: document.getElementById('sos-countdown'),
+  sosBtnCancel: document.getElementById('sos-btn-cancel'),
 
   // Recuperación de sesión
   sessionRecoveryModal: document.getElementById('session-recovery-modal'),
@@ -644,6 +656,9 @@ function startWorkout() {
   // Adquirir bloqueo de suspensión de pantalla
   requestWakeLock();
 
+  // Activar detección de caídas
+  startCrashDetection();
+
   // Buscar y autoconectar sensores emparejados en el navegador
   triggerSilentBluetoothReconnect();
 
@@ -682,6 +697,8 @@ function startWorkout() {
         AppState.activeRide.movingTimeSeconds = (AppState.activeRide.movingTimeSeconds || 0) + 1;
       }
       DOM.liveMovingTime.textContent = BiciCharts.formatDuration(AppState.activeRide.movingTimeSeconds || 0);
+
+      CrashDetector.updateSpeed(AppState.activeRide.speed);
 
       updateLiveClock();
 
@@ -810,6 +827,7 @@ function pauseWorkout() {
   
   // Liberar bloqueo de suspensión de pantalla al pausar
   releaseWakeLock();
+  stopCrashDetection();
 
   if (!AppState.simulation.isActive) {
     BiciGPS.stopTracking();
@@ -866,6 +884,7 @@ function stopWorkout() {
   
   // Liberar bloqueo de suspensión al finalizar rodada
   releaseWakeLock();
+  stopCrashDetection();
 
   if (AppState.simulation.isActive) {
     stopDemoSimulation();
@@ -923,11 +942,14 @@ function stopWorkout() {
 
   // Guardar en la base de datos asíncrona IndexedDB
   DB.saveRide(newRide).then(() => {
-    Storage.clearActiveSession(); // Limpiar recuperación
-    
-    // Disparar sincronización automática en segundo plano
+    Storage.clearActiveSession();
+
+    // Firebase sync (si hay red y usuario autenticado)
+    saveRideToFirestore(newRide).then(synced => {
+      if (synced) DB.markRideSynced(newRide.timestamp);
+    });
+
     triggerBackgroundSync();
-    
     openRideDetail(newRide);
   }).catch(err => {
     console.error("Error al guardar rodada en IndexedDB:", err);
@@ -1587,6 +1609,73 @@ async function forceUnpairAll() {
   alert('Todos los sensores han sido desemparejados. Reinicia la app para limpiar los permisos Bluetooth del sistema.');
 }
 
+// --- CRASH DETECTION & SOS SEQUENCE ---
+
+function startCrashDetection() {
+  CrashDetector.onCrashTrigger = triggerSOS;
+  CrashDetector.requestPermission().then(granted => {
+    if (granted) CrashDetector.start();
+  });
+}
+
+function stopCrashDetection() {
+  CrashDetector.stop();
+}
+
+function triggerSOS() {
+  if (AppState.sosCountdown > 0) return;
+  AppState.sosCountdown = 15;
+
+  DOM.sosOverlay.classList.remove('hide');
+  DOM.sosCountdownEl.textContent = '15';
+  DOM.sosBtnCancel.classList.remove('hide');
+
+  // Beep de emergencia
+  try {
+    AppState.sosAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch(e) { AppState.sosAudioCtx = null; }
+
+  AppState.sosInterval = setInterval(() => {
+    AppState.sosCountdown--;
+    DOM.sosCountdownEl.textContent = AppState.sosCountdown;
+
+    if (AppState.sosAudioCtx) {
+      const osc = AppState.sosAudioCtx.createOscillator();
+      const gain = AppState.sosAudioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(AppState.sosAudioCtx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'square';
+      gain.gain.value = 0.15;
+      osc.start(AppState.sosAudioCtx.currentTime);
+      osc.stop(AppState.sosAudioCtx.currentTime + 0.12);
+    }
+
+    if (AppState.sosCountdown <= 0) {
+      clearInterval(AppState.sosInterval);
+      AppState.sosInterval = null;
+      sendSOSAlert();
+    }
+  }, 1000);
+}
+
+function cancelSOS() {
+  if (AppState.sosInterval) clearInterval(AppState.sosInterval);
+  AppState.sosInterval = null;
+  AppState.sosCountdown = 0;
+  if (AppState.sosAudioCtx) { AppState.sosAudioCtx.close().catch(() => {}); AppState.sosAudioCtx = null; }
+  DOM.sosOverlay.classList.add('hide');
+}
+
+function sendSOSAlert() {
+  DOM.sosOverlay.classList.add('hide');
+  const lat = AppState.activeRide.lat || 0;
+  const lon = AppState.activeRide.lon || 0;
+  const mapsUrl = `https://maps.google.com/?q=${lat},${lon}`;
+  const msg = encodeURIComponent(`🚨 EMERGENCIA BICILOG: Posible caída detectada.\nUbicación: ${mapsUrl}\nVelocidad: ${AppState.activeRide.speed.toFixed(1)} km/h`);
+  window.open(`https://wa.me/?text=${msg}`, '_blank');
+}
+
 // --- PIPELINE DE SINCRONIZACIÓN DE ACTIVIDADES ---
 
 // Registrar sincronización en segundo plano (PWA Background Sync)
@@ -1616,7 +1705,17 @@ function runActiveSync() {
     if (pending.length === 0) return;
 
     pending.forEach(ride => {
-      fetch('https://rrojas-synergia.github.io/api/sync', {
+      // Intento 1: Firebase Firestore
+      saveRideToFirestore(ride).then(synced => {
+        if (synced) {
+          DB.markRideSynced(ride.timestamp).then(() => {
+            console.log(`[Firebase Sync] Rodada "${ride.title}" sincronizada.`);
+            loadDashboardData();
+          });
+          return;
+        }
+        // Intento 2: REST externo
+        return fetch('https://rrojas-synergia.github.io/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1655,6 +1754,7 @@ function runActiveSync() {
 document.addEventListener('DOMContentLoaded', () => {
   // Inicializar base de datos IndexedDB antes de cargar vistas y reconectar
   DB.init().then(() => {
+    FBAuth.init();
     loadDashboardData();
     loadBikeProfiles();
     triggerSilentBluetoothReconnect();
@@ -1773,6 +1873,9 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnBikeCancel.addEventListener('click', () => { DOM.bikeProfileModal.classList.add('hide'); });
   DOM.btnBikeSave.addEventListener('click', () => saveBikeProfileHandler());
   DOM.btnForceUnpair.addEventListener('click', () => forceUnpairAll());
+
+  // SOS cancel
+  DOM.sosBtnCancel.addEventListener('click', () => cancelSOS());
 
   // Selector del Simulador
   DOM.chkSimulate.addEventListener('change', (e) => {
