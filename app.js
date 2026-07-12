@@ -684,6 +684,17 @@ function startWorkout() {
       DOM.liveMovingTime.textContent = BiciCharts.formatDuration(AppState.activeRide.movingTimeSeconds || 0);
 
       updateLiveClock();
+
+      // Auto-hide controls: esconder si hay velocidad, mostrar si parado o tap reciente
+      const controls = document.querySelector('.recording-actions');
+      if (controls) {
+        const tappedRecently = AppState.activeRide.controlsShowUntil && Date.now() < AppState.activeRide.controlsShowUntil;
+        if (AppState.activeRide.speed > 0 && !tappedRecently) {
+          controls.classList.add('auto-hidden');
+        } else {
+          controls.classList.remove('auto-hidden');
+        }
+      }
       
       if (AppState.activeRide.hr > 0) {
         const zoneNum = Storage.getZoneForHR(AppState.activeRide.hr, AppState.hrZones);
@@ -1730,6 +1741,15 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.btnStopRide.addEventListener('click', () => {
     if (document.activeElement) document.activeElement.blur();
     stopWorkout();
+  });
+
+  // Tap-to-show controls: al tocar la pantalla de grabación, mostrar botones 3s
+  DOM.screens.recording.addEventListener('touchstart', () => {
+    if (AppState.activeRide && AppState.activeRide.isRecording) {
+      AppState.activeRide.controlsShowUntil = Date.now() + 3000;
+      const controls = document.querySelector('.recording-actions');
+      if (controls) controls.classList.remove('auto-hidden');
+    }
   });
 
   // Limpiar destino fijado
