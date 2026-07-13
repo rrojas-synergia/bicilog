@@ -2,12 +2,12 @@
 // Config: reemplazar con las credenciales del proyecto Firebase
 
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSy___________________________",
-  authDomain: "bicilog.firebaseapp.com",
-  projectId: "bicilog",
-  storageBucket: "bicilog.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:__________________"
+  apiKey: "AIzaSyCs9BPWh6KGFdvrmAQYfhljNvGGg_aMDdo",
+  authDomain: "bicilog-90afd.firebaseapp.com",
+  projectId: "bicilog-90afd",
+  storageBucket: "bicilog-90afd.firebasestorage.app",
+  messagingSenderId: "568134072948",
+  appId: "1:568134072948:web:11c8f2202a9af59d4e6f21"
 };
 
 const ADMIN_UPGRADE_CODE = "COACH2026";
