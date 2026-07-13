@@ -38,7 +38,7 @@ async function initFirebase() {
         import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'),
         timeout.catch(() => { throw new Error('CDN_TIMEOUT'); })
       ]);
-      const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } = authMod;
+      const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithRedirect, getRedirectResult } = authMod;
 
       const mod = await Promise.race([
         import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js'),
@@ -61,7 +61,7 @@ async function initFirebase() {
       cachedFB = {
         app: firebaseApp, auth: firebaseAuth, db: firebaseDB, firestore: firestoreMod,
         signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
-        GoogleAuthProvider, signInWithPopup
+        GoogleAuthProvider, signInWithRedirect, getRedirectResult
       };
       return cachedFB;
     } catch (e) {
@@ -88,6 +88,16 @@ export const FBAuth = {
       this.currentUser = user;
       window.dispatchEvent(new CustomEvent('firebase-auth-change', { detail: { user } }));
     });
+    // Capturar resultado de redirect (Google Sign-In en mobile/PWA)
+    try {
+      const result = await fb.getRedirectResult(fb.auth);
+      if (result && result.user) {
+        this.currentUser = result.user;
+        window.dispatchEvent(new CustomEvent('firebase-auth-change', { detail: { user: result.user } }));
+      }
+    } catch (e) {
+      console.warn('[Auth] Redirect result error:', e.message);
+    }
     this.initialized = true;
   },
 
@@ -117,9 +127,8 @@ export const FBAuth = {
     const fb = await initFirebase();
     if (!fb) throw new Error('Firebase no disponible');
     const provider = new fb.GoogleAuthProvider();
-    const cred = await fb.signInWithPopup(fb.auth, provider);
-    this.currentUser = cred.user;
-    return cred.user;
+    provider.setCustomParameters({ prompt: 'select_account' });
+    await fb.signInWithRedirect(fb.auth, provider);
   }
 };
 

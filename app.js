@@ -239,6 +239,7 @@ const DOM = {
   authRegPass: document.getElementById('auth-reg-pass'),
   btnAuthGoogle: document.getElementById('btn-auth-google'),
   btnAuthSkip: document.getElementById('btn-auth-skip'),
+  btnAuthClose: document.getElementById('btn-auth-close'),
   authErrorMsg: document.getElementById('auth-error-msg'),
 
   // Recuperación de sesión
@@ -2031,6 +2032,7 @@ document.addEventListener('DOMContentLoaded', () => {
   DOM.authFormRegister.addEventListener('submit', handleAuthRegister);
   DOM.btnAuthGoogle.addEventListener('click', handleAuthGoogle);
   DOM.btnAuthSkip.addEventListener('click', handleAuthSkip);
+  DOM.btnAuthClose.addEventListener('click', handleAuthSkip);
   document.querySelectorAll('.auth-tab').forEach(tab => {
     tab.addEventListener('click', () => switchAuthTab(tab.dataset.mode));
   });
