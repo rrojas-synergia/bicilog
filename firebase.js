@@ -16,10 +16,11 @@ let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDB = null;
 let firestoreMod = null;
-let initPromise = null;  // singleton para evitar intentos paralelos de init
+let initPromise = null;
+let cachedFB = null;  // objeto completo con funciones de auth
 
 async function initFirebase() {
-  if (firebaseApp) return { app: firebaseApp, auth: firebaseAuth, db: firebaseDB, firestore: firestoreMod };
+  if (cachedFB) return cachedFB;
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
@@ -57,11 +58,12 @@ async function initFirebase() {
       firebaseAuth = getAuth(firebaseApp);
       firebaseDB = getFirestore(firebaseApp);
 
-      return {
+      cachedFB = {
         app: firebaseApp, auth: firebaseAuth, db: firebaseDB, firestore: firestoreMod,
         signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
         GoogleAuthProvider, signInWithPopup
       };
+      return cachedFB;
     } catch (e) {
       console.warn('[Firebase] Init falló — Modo Local (offline):', e.message);
       initPromise = null;
