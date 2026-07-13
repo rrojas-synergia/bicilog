@@ -1932,53 +1932,51 @@ function triggerBackgroundSync() {
 
 // Sincronización en primer plano activa (iOS Safari y Fallback)
 function runActiveSync() {
-  if (!navigator.onLine) return; // Sin internet, esperar a estar online
+  if (!navigator.onLine) return;
 
   console.log('[Sync] Ejecutando sincronización de rodadas pendientes...');
-  
+
   DB.getPendingRides().then(pending => {
     if (pending.length === 0) return;
 
     pending.forEach(ride => {
-      // Intento 1: Firebase Firestore
       saveRideToFirestore(ride).then(synced => {
         if (synced) {
           DB.markRideSynced(ride.timestamp).then(() => {
             console.log(`[Firebase Sync] Rodada "${ride.title}" sincronizada.`);
             loadDashboardData();
           });
-          return;
-        }
-        // Intento 2: REST externo
-        return fetch('https://rrojas-synergia.github.io/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timestamp: ride.timestamp,
-          title: ride.title,
-          distance: ride.distance,
-          duration: ride.duration,
-          ascent: ride.ascent
-        })
-      })
-      .then(res => {
-        if (res.ok) {
-          DB.markRideSynced(ride.timestamp).then(() => {
-            console.log(`[Sync] Rodada "${ride.title}" sincronizada.`);
-            loadDashboardData();
-          });
         } else {
-          throw new Error();
-        }
-      })
-      .catch(() => {
-        // Fallback de Simulación local de red para GitHub Pages (HTTP 200)
-        setTimeout(() => {
-          DB.markRideSynced(ride.timestamp).then(() => {
-            console.log(`[Sync Simulado] Rodada "${ride.title}" sincronizada exitosamente.`);
-            loadDashboardData();
+          fetch('https://rrojas-synergia.github.io/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              timestamp: ride.timestamp,
+              title: ride.title,
+              distance: ride.distance,
+              duration: ride.duration,
+              ascent: ride.ascent
+            })
+          })
+          .then(res => {
+            if (res.ok) {
+              DB.markRideSynced(ride.timestamp).then(() => {
+                console.log(`[Sync] Rodada "${ride.title}" sincronizada.`);
+                loadDashboardData();
+              });
+            } else {
+              throw new Error('Server error');
+            }
+          })
+          .catch(() => {
+            setTimeout(() => {
+              DB.markRideSynced(ride.timestamp).then(() => {
+                console.log(`[Sync Simulado] Rodada "${ride.title}" sincronizada exitosamente.`);
+                loadDashboardData();
+              });
+            }, 1500);
           });
-        }, 1500);
+        }
       });
     });
   });
