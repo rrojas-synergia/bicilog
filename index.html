@@ -30,7 +30,7 @@
       <header class="app-header">
         <div class="header-left">
           <span class="app-logo">Bici<span class="highlight">Log</span></span>
-          <span class="version-badge">v0.0.5</span>
+          <span class="version-badge">v0.0.6</span>
         </div>
         <button id="btn-open-settings" class="icon-button" aria-label="Ajustes">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -388,6 +388,9 @@
             <button type="button" id="btn-goto-bikes" class="submit-btn" style="background-color: #D3F8E8; color: #0d8a67; border: none; box-shadow: none; height: 46px; border-radius: 12px; margin-bottom: 0; width: 100%; font-weight: 700; margin-top: 12px;">
               🚲 Gestionar Bicicletas
             </button>
+            <button type="button" id="btn-coach-dashboard" class="submit-btn" style="background-color: #FFEAA7; color: #e67e22; border: none; box-shadow: none; height: 46px; border-radius: 12px; margin-bottom: 0; width: 100%; font-weight: 700; margin-top: 12px;">
+              📡 Coach Dashboard (Mapa en Vivo)
+            </button>
           </div>
 
           <!-- Perfil del Ciclista -->
@@ -476,6 +479,34 @@
             </div>
           </div>
 
+          <!-- Club & Telemetría -->
+          <div class="settings-group">
+            <h3 class="group-title">Club y Transmisión en Vivo</h3>
+            <div class="form-row-toggle">
+              <span>Transmitir telemetría a mi Club</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="set-broadcast">
+                <span class="slider round"></span>
+              </label>
+            </div>
+            <div class="form-row" style="margin-top: 12px;">
+              <label for="set-club-code">Código del Club</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="set-club-code" placeholder="Ej: BOG-TEAM" style="flex: 1; height: 44px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; font-weight: 600; outline: none; background: var(--bg-primary);">
+                <button type="button" id="btn-join-club" class="submit-btn" style="height: 44px; border-radius: 8px; padding: 0 16px; font-size: 13px; white-space: nowrap; width: auto;">Unirse</button>
+              </div>
+            </div>
+            <p class="settings-note" style="margin-top: 4px;">Comparte tu código de club con tu entrenador para que pueda verte en vivo.</p>
+
+            <div style="border-top: 1px solid var(--color-border); padding-top: 12px; margin-top: 12px;">
+              <p class="settings-note" style="margin-top: 0; margin-bottom: 8px;"><strong>¿Eres entrenador?</strong> Ingresa el código de administrador.</p>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="set-admin-code" placeholder="Código admin" style="flex: 1; height: 44px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; font-weight: 600; outline: none; background: var(--bg-primary);">
+                <button type="button" id="btn-upgrade-coach" class="submit-btn" style="height: 44px; border-radius: 8px; padding: 0 16px; font-size: 13px; white-space: nowrap; width: auto; background: #FF9F43; color: #fff;">Coach</button>
+              </div>
+            </div>
+          </div>
+
           <button type="submit" class="submit-btn">Guardar Cambios</button>
         </form>
       </main>
@@ -525,6 +556,23 @@
           <button id="btn-add-bike" class="submit-btn" style="background-color: #D3F8E8; color: #0d8a67; border: none; box-shadow: none; height: 46px; border-radius: 12px; margin-top: 20px; width: 100%; font-weight: 700;">
             ➕ Agregar Bicicleta
           </button>
+        </div>
+      </main>
+    </section>
+
+    <!-- PANTALLA 7: COACH DASHBOARD (Mapa en Vivo del Club) -->
+    <section id="screen-coach" class="app-screen">
+      <header class="app-header">
+        <button id="btn-coach-back" class="icon-button" aria-label="Volver">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <span class="header-title">Coach Dashboard</span>
+        <span id="coach-club-label" class="coach-club-badge">Club: --</span>
+      </header>
+      <main class="screen-content" style="padding: 0; display: flex; flex-direction: column;">
+        <div id="coach-map" style="flex: 1; width: 100%; min-height: 300px;"></div>
+        <div id="coach-riders-list" style="background: var(--bg-card); padding: 12px 16px; border-top: 1px solid var(--color-border); font-size: 12px; color: var(--text-muted); text-align: center; min-height: 48px; display: flex; align-items: center; justify-content: center;">
+          Esperando ciclistas activos...
         </div>
       </main>
     </section>

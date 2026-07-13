@@ -1326,4 +1326,25 @@ input:checked + .slider:before {
   transform: scale(0.96);
 }
 
+/* --- COACH DASHBOARD --- */
+
+.coach-club-badge {
+  font-family: var(--font-sport);
+  font-size: 11px;
+  font-weight: 700;
+  color: #e67e22;
+  background: #FFEAA7;
+  padding: 4px 10px;
+  border-radius: 10px;
+}
+
+.coach-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.coach-marker div {
+  transition: background 0.3s;
+}
+
 

@@ -5,10 +5,10 @@ import { DB } from './db.js'; // Base de datos IndexedDB
 import { BiciSensors } from './bluetooth.js';
 import { BiciGPS } from './gps.js';
 import { BiciCharts } from './charts.js';
-import { FBAuth, saveRideToFirestore } from './firebase.js';
+import { FBAuth, saveRideToFirestore, saveUserProfile, getUserProfile, updateLiveTelemetry, clearLiveTelemetry, subscribeActiveRides, getCoachClubCode, upgradeToCoach } from './firebase.js';
 import { CrashDetector } from './crash-detector.js';
 
-const APP_VERSION = "0.0.5";
+const APP_VERSION = "0.0.6";
 
 // --- ESTADO GLOBAL DE LA APLICACIÓN ---
 const AppState = {
@@ -65,6 +65,12 @@ const AppState = {
   bikeProfiles: [],
   selectedBikeProfileId: null,
 
+  // Club & Telemetry
+  userProfile: null,
+  telemetryInterval: null,
+  coachMap: null,
+  coachMarkers: {},
+
   // SOS / Crash Detection
   sosCountdown: 0,
   sosInterval: null,
@@ -79,7 +85,8 @@ const DOM = {
     detail: document.getElementById('screen-detail'),
     settings: document.getElementById('screen-settings'),
     sensors: document.getElementById('screen-sensors'), // Pantalla de CRUD Sensores
-    bikes: document.getElementById('screen-bikes')        // Pantalla de Perfiles de Bici
+    bikes: document.getElementById('screen-bikes'),       // Pantalla de Perfiles de Bici
+    coach: document.getElementById('screen-coach')       // Coach Dashboard
   },
   
   // Dashboard
@@ -190,6 +197,20 @@ const DOM = {
   // Gestión de Bicicletas
   btnGotoBikes: document.getElementById('btn-goto-bikes'),
   btnBikesBack: document.getElementById('btn-bikes-back'),
+
+  // Club & Telemetry Settings
+  setBroadcast: document.getElementById('set-broadcast'),
+  setClubCode: document.getElementById('set-club-code'),
+  btnJoinClub: document.getElementById('btn-join-club'),
+  setAdminCode: document.getElementById('set-admin-code'),
+  btnUpgradeCoach: document.getElementById('btn-upgrade-coach'),
+
+  // Coach Dashboard
+  btnCoachDashboard: document.getElementById('btn-coach-dashboard'),
+  coachDashboardScreen: document.getElementById('screen-coach'),
+  coachMapContainer: document.getElementById('coach-map'),
+  btnCoachBack: document.getElementById('btn-coach-back'),
+  coachClubLabel: document.getElementById('coach-club-label'),
   bikesCrudList: document.getElementById('bikes-crud-list'),
   btnAddBike: document.getElementById('btn-add-bike'),
   bikeProfileSelect: document.getElementById('bike-profile-select'),
@@ -659,6 +680,9 @@ function startWorkout() {
   // Activar detección de caídas
   startCrashDetection();
 
+  // Motor de telemetría en vivo (cada 5s)
+  startTelemetryEngine();
+
   // Buscar y autoconectar sensores emparejados en el navegador
   triggerSilentBluetoothReconnect();
 
@@ -828,6 +852,7 @@ function pauseWorkout() {
   // Liberar bloqueo de suspensión de pantalla al pausar
   releaseWakeLock();
   stopCrashDetection();
+  stopTelemetryEngine();
 
   if (!AppState.simulation.isActive) {
     BiciGPS.stopTracking();
@@ -885,6 +910,7 @@ function stopWorkout() {
   // Liberar bloqueo de suspensión al finalizar rodada
   releaseWakeLock();
   stopCrashDetection();
+  stopTelemetryEngine();
 
   if (AppState.simulation.isActive) {
     stopDemoSimulation();
@@ -1622,6 +1648,127 @@ function stopCrashDetection() {
   CrashDetector.stop();
 }
 
+// --- LIVE TELEMETRY ENGINE ---
+
+function startTelemetryEngine() {
+  AppState.telemetryInterval = setInterval(() => {
+    if (!AppState.activeRide.isRecording) return;
+    if (AppState.activeRide.isPaused || AppState.activeRide.isAutoPaused) return;
+
+    let zone = 0;
+    if (AppState.activeRide.hr > 0) {
+      zone = Storage.getZoneForHR(AppState.activeRide.hr, AppState.hrZones);
+    }
+
+    updateLiveTelemetry({
+      lat: AppState.activeRide.lat,
+      lon: AppState.activeRide.lon,
+      speed: AppState.activeRide.speed,
+      hr: AppState.activeRide.hr,
+      cadence: AppState.activeRide.cadence,
+      zone: zone,
+      distance: AppState.activeRide.distance,
+      elapsed: AppState.activeRide.elapsedSeconds
+    });
+  }, 5000);
+}
+
+function stopTelemetryEngine() {
+  if (AppState.telemetryInterval) clearInterval(AppState.telemetryInterval);
+  AppState.telemetryInterval = null;
+  clearLiveTelemetry();
+}
+
+// --- CLUB & COACH DASHBOARD ---
+
+async function loadUserProfileToState() {
+  AppState.userProfile = await getUserProfile();
+  if (AppState.userProfile) {
+    DOM.setBroadcast.checked = !!AppState.userProfile.broadcastTelemetry;
+    DOM.setClubCode.value = AppState.userProfile.clubCode || '';
+  }
+}
+
+async function handleJoinClub() {
+  const code = DOM.setClubCode.value.trim();
+  if (!code) { alert('Ingresa un código de club.'); return; }
+  const profile = AppState.userProfile || {};
+  profile.clubCode = code;
+  await saveUserProfile(profile);
+  await loadUserProfileToState();
+  alert(`Unido al club: ${code}`);
+}
+
+async function handleUpgradeCoach() {
+  const code = DOM.setAdminCode.value.trim();
+  if (!code) return alert('Ingresa el código de administrador.');
+  try {
+    const clubCode = await upgradeToCoach(code);
+    await loadUserProfileToState();
+    alert(`Promovido a Coach del club: ${clubCode}`);
+  } catch (e) { alert(e.message); }
+}
+
+async function openCoachDashboard() {
+  const clubCode = await getCoachClubCode();
+  if (!clubCode) { alert('Debes ser Coach de un club. Únete a uno y usa el código de administrador.'); return; }
+
+  DOM.coachClubLabel.textContent = `Club: ${clubCode}`;
+  navigateTo('coach');
+
+  setTimeout(() => {
+    if (AppState.coachMap) { AppState.coachMap.remove(); AppState.coachMap = null; }
+    AppState.coachMap = L.map('coach-map', { zoomControl: true }).setView([4.6097, -74.0817], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OSM'
+    }).addTo(AppState.coachMap);
+
+    subscribeActiveRides(clubCode, (rides) => {
+      const listEl = document.getElementById('coach-riders-list');
+      if (!AppState.coachMap) return;
+
+      const currentIds = new Set(rides.map(r => r.uid));
+      Object.keys(AppState.coachMarkers).forEach(id => {
+        if (!currentIds.has(id)) {
+          AppState.coachMap.removeLayer(AppState.coachMarkers[id]);
+          delete AppState.coachMarkers[id];
+        }
+      });
+
+      rides.forEach(ride => {
+        if (!ride.currentLat || !ride.currentLng) return;
+        const zoneColor = BiciCharts.ZONE_COLORS[`z${ride.currentZone}`] || '#888';
+        const tooltip = `${ride.displayName || 'Ciclista'}<br>⚡${ride.currentSpeed?.toFixed(1) || '0'} km/h<br>❤️${ride.currentHR || '--'} BPM (Z${ride.currentZone})`;
+
+        if (AppState.coachMarkers[ride.uid]) {
+          AppState.coachMarkers[ride.uid].setLatLng([ride.currentLat, ride.currentLng]);
+          AppState.coachMarkers[ride.uid].setTooltipContent(tooltip);
+        } else {
+          const icon = L.divIcon({
+            className: 'coach-marker',
+            html: `<div style="background:${zoneColor};width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 8px rgba(0,0,0,0.3);"></div>`,
+            iconSize: [16, 16]
+          });
+          const marker = L.marker([ride.currentLat, ride.currentLng], { icon })
+            .addTo(AppState.coachMap)
+            .bindTooltip(tooltip, { direction: 'top', offset: [0, -10] });
+          AppState.coachMarkers[ride.uid] = marker;
+        }
+      });
+
+      listEl.textContent = rides.length
+        ? `${rides.length} ciclista(s) activo(s) en el club`
+        : 'Esperando ciclistas activos...';
+    });
+  }, 100);
+}
+
+function closeCoachDashboard() {
+  if (AppState.coachMap) { AppState.coachMap.remove(); AppState.coachMap = null; }
+  AppState.coachMarkers = {};
+  navigateTo('settings');
+}
+
 function triggerSOS() {
   if (AppState.sosCountdown > 0) return;
   AppState.sosCountdown = 15;
@@ -1755,6 +1902,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Inicializar base de datos IndexedDB antes de cargar vistas y reconectar
   DB.init().then(() => {
     FBAuth.init();
+    loadUserProfileToState();
     loadDashboardData();
     loadBikeProfiles();
     triggerSilentBluetoothReconnect();
@@ -1876,6 +2024,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // SOS cancel
   DOM.sosBtnCancel.addEventListener('click', () => cancelSOS());
+
+  // Club & Telemetry
+  DOM.btnJoinClub.addEventListener('click', () => handleJoinClub());
+  DOM.btnUpgradeCoach.addEventListener('click', () => handleUpgradeCoach());
+  DOM.btnCoachDashboard.addEventListener('click', () => openCoachDashboard());
+  DOM.btnCoachBack.addEventListener('click', () => closeCoachDashboard());
+
+  // Guardar toggle de broadcast al cambiar
+  DOM.setBroadcast.addEventListener('change', async () => {
+    const profile = AppState.userProfile || {};
+    profile.broadcastTelemetry = DOM.setBroadcast.checked;
+    await saveUserProfile(profile);
+    AppState.userProfile = profile;
+  });
 
   // Selector del Simulador
   DOM.chkSimulate.addEventListener('change', (e) => {
