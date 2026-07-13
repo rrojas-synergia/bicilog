@@ -1682,10 +1682,21 @@ function stopTelemetryEngine() {
 // --- CLUB & COACH DASHBOARD ---
 
 async function loadUserProfileToState() {
-  AppState.userProfile = await getUserProfile();
-  if (AppState.userProfile) {
-    DOM.setBroadcast.checked = !!AppState.userProfile.broadcastTelemetry;
-    DOM.setClubCode.value = AppState.userProfile.clubCode || '';
+  try {
+    AppState.userProfile = await getUserProfile();
+    if (AppState.userProfile) {
+      if (DOM.setBroadcast) DOM.setBroadcast.checked = !!AppState.userProfile.broadcastTelemetry;
+      if (DOM.setClubCode) DOM.setClubCode.value = AppState.userProfile.clubCode || '';
+    }
+  } catch (_) { /* modo local */ }
+}
+
+async function bootFirebaseSilently() {
+  try {
+    await FBAuth.init();
+    await loadUserProfileToState();
+  } catch (_) {
+    console.warn('[App] Firebase init falló — corriendo en Modo Local.');
   }
 }
 
@@ -1899,17 +1910,22 @@ function runActiveSync() {
 // --- INICIALIZADORES Y EVENTOS ---
 
 document.addEventListener('DOMContentLoaded', () => {
+  // --- CAPA ANTI-CRASH: errores de Firebase no deben congelar la app ---
+  window.addEventListener('unhandledrejection', (e) => {
+    console.warn('[App] Rejection silenciado:', e.reason?.message || e.reason);
+    e.preventDefault();
+  });
+
   // Inicializar base de datos IndexedDB antes de cargar vistas y reconectar
   DB.init().then(() => {
-    FBAuth.init();
-    loadUserProfileToState();
     loadDashboardData();
     loadBikeProfiles();
     triggerSilentBluetoothReconnect();
     runActiveSync();
+    bootFirebaseSilently();
   }).catch(err => {
     console.error("No se pudo iniciar IndexedDB. Cayendo en modo limitado.", err);
-    loadDashboardData(); // Cargar con lo que haya
+    loadDashboardData();
   });
 
   // Listener para sincronización activa cuando se recupera red

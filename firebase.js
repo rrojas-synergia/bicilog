@@ -16,29 +16,59 @@ let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDB = null;
 let firestoreMod = null;
+let initPromise = null;  // singleton para evitar intentos paralelos de init
 
 async function initFirebase() {
   if (firebaseApp) return { app: firebaseApp, auth: firebaseAuth, db: firebaseDB, firestore: firestoreMod };
-  try {
-    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
-    const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } =
-      await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
-    const mod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    const { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc } = mod;
-    firestoreMod = { doc, setDoc, getDoc, updateDoc, collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc };
+  if (initPromise) return initPromise;
 
-    firebaseApp = initializeApp(FIREBASE_CONFIG);
-    firebaseAuth = getAuth(firebaseApp);
-    firebaseDB = getFirestore(firebaseApp);
+  initPromise = (async () => {
+    try {
+      // Timeout de 5s: si el CDN no carga, caer en modo local
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('CDN_TIMEOUT')), 5000));
 
-    return {
-      app: firebaseApp, auth: firebaseAuth, db: firebaseDB, firestore: firestoreMod,
-      signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
-    };
-  } catch (e) {
-    console.warn('[Firebase] SDK no disponible:', e.message);
-    return null;
-  }
+      const appMod = await Promise.race([
+        import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
+        timeout.catch(() => { throw new Error('CDN_TIMEOUT'); })
+      ]);
+      const { initializeApp } = appMod;
+
+      const authMod = await Promise.race([
+        import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'),
+        timeout.catch(() => { throw new Error('CDN_TIMEOUT'); })
+      ]);
+      const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } = authMod;
+
+      const mod = await Promise.race([
+        import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'),
+        timeout.catch(() => { throw new Error('CDN_TIMEOUT'); })
+      ]);
+      const { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc } = mod;
+      firestoreMod = { doc, setDoc, getDoc, updateDoc, collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc };
+
+      try {
+        firebaseApp = initializeApp(FIREBASE_CONFIG);
+      } catch (cfgErr) {
+        console.warn('[Firebase] Configuración inválida. Modo Local activado:', cfgErr.message);
+        initPromise = null;
+        return null;
+      }
+
+      firebaseAuth = getAuth(firebaseApp);
+      firebaseDB = getFirestore(firebaseApp);
+
+      return {
+        app: firebaseApp, auth: firebaseAuth, db: firebaseDB, firestore: firestoreMod,
+        signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
+      };
+    } catch (e) {
+      console.warn('[Firebase] Init falló — Modo Local (offline):', e.message);
+      initPromise = null;
+      return null;
+    }
+  })();
+
+  return initPromise;
 }
 
 // --- AUTENTICACIÓN ---
