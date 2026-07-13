@@ -1993,17 +1993,27 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
   });
 
-  // Inicializar base de datos IndexedDB antes de cargar vistas y reconectar
+  // ===== BOOT SEQUENCE: Dashboard INMEDIATO. DB y Firebase DESPUÉS. =====
+  console.log('[Boot] DOMContentLoaded. Registrando event listeners...');
+
+  // 1. Cargar dashboard inmediatamente (sin esperar DB ni Firebase)
+  loadDashboardData();
+  console.log('[Boot] Dashboard cargado en modo inmediato.');
+
+  // 2. DB y periféricos en segundo plano — nunca bloquean la UI
   DB.init().then(() => {
-    loadDashboardData();
+    console.log('[Boot] IndexedDB lista.');
     loadBikeProfiles();
     triggerSilentBluetoothReconnect();
     runActiveSync();
-    bootFirebaseSilently();
   }).catch(err => {
-    console.error("No se pudo iniciar IndexedDB. Cayendo en modo limitado.", err);
-    loadDashboardData();
+    console.warn('[Boot] IndexedDB falló. Modo localStorage:', err);
   });
+
+  // 3. Firebase al final absoluto — no puede tumbar la app
+  console.log('[Boot] Intentando Firebase Init...');
+  bootFirebaseSilently();
+  console.log('[Boot] UI Event Listeners activos. App lista.');
 
   // Listener para sincronización activa cuando se recupera red
   window.addEventListener('online', runActiveSync);
