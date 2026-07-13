@@ -81,6 +81,7 @@ const AppState = {
 const DOM = {
   screens: {
     dashboard: document.getElementById('screen-dashboard'),
+    auth: document.getElementById('screen-auth'),
     recording: document.getElementById('screen-recording'),
     detail: document.getElementById('screen-detail'),
     settings: document.getElementById('screen-settings'),
@@ -227,6 +228,18 @@ const DOM = {
   sosOverlay: document.getElementById('sos-overlay'),
   sosCountdownEl: document.getElementById('sos-countdown'),
   sosBtnCancel: document.getElementById('sos-btn-cancel'),
+
+  // Auth UI
+  authFormLogin: document.getElementById('auth-form-login'),
+  authFormRegister: document.getElementById('auth-form-register'),
+  authLoginEmail: document.getElementById('auth-login-email'),
+  authLoginPass: document.getElementById('auth-login-pass'),
+  authRegName: document.getElementById('auth-reg-name'),
+  authRegEmail: document.getElementById('auth-reg-email'),
+  authRegPass: document.getElementById('auth-reg-pass'),
+  btnAuthGoogle: document.getElementById('btn-auth-google'),
+  btnAuthSkip: document.getElementById('btn-auth-skip'),
+  authErrorMsg: document.getElementById('auth-error-msg'),
 
   // Recuperación de sesión
   sessionRecoveryModal: document.getElementById('session-recovery-modal'),
@@ -1695,10 +1708,74 @@ async function bootFirebaseSilently() {
   try {
     await FBAuth.init();
     await loadUserProfileToState();
+    onAuthStateReady();
   } catch (_) {
     console.warn('[App] Firebase init falló — corriendo en Modo Local.');
   }
 }
+
+// --- AUTH UI LOGIC ---
+
+function onAuthStateReady() {
+  if (FBAuth.currentUser) {
+    navigateTo('dashboard');
+  } else {
+    navigateTo('auth');
+  }
+  window.addEventListener('firebase-auth-change', (e) => {
+    if (e.detail.user) {
+      navigateTo('dashboard');
+      saveUserProfile({ name: e.detail.user.displayName || '' });
+    } else {
+      navigateTo('auth');
+    }
+  });
+}
+
+function showAuthError(msg) {
+  DOM.authErrorMsg.textContent = msg;
+  DOM.authErrorMsg.classList.remove('hide');
+  setTimeout(() => DOM.authErrorMsg.classList.add('hide'), 4000);
+}
+
+function switchAuthTab(mode) {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+  DOM.authFormLogin.classList.toggle('hide', mode !== 'login');
+  DOM.authFormRegister.classList.toggle('hide', mode !== 'register');
+  DOM.authErrorMsg.classList.add('hide');
+}
+
+async function handleAuthLogin(e) {
+  e.preventDefault();
+  try {
+    await FBAuth.signInEmail(DOM.authLoginEmail.value, DOM.authLoginPass.value);
+  } catch (err) { showAuthError(err.message); }
+}
+
+async function handleAuthRegister(e) {
+  e.preventDefault();
+  const name = DOM.authRegName.value.trim();
+  if (!name) return showAuthError('Ingresa tu nombre.');
+  try {
+    await FBAuth.signUpEmail(DOM.authRegEmail.value, DOM.authRegPass.value);
+    await saveUserProfile({ name });
+  } catch (err) { showAuthError(err.message); }
+}
+
+async function handleAuthGoogle() {
+  try { await FBAuth.signInGoogle(); }
+  catch (err) { showAuthError(err.message); }
+}
+
+function handleAuthSkip() {
+  navigateTo('dashboard');
+}
+
+// Tab switching
+document.addEventListener('DOMContentLoaded', () => {
+  // ... (already registered elsewhere)
+});
+
 
 async function handleJoinClub() {
   const code = DOM.setClubCode.value.trim();
@@ -1940,6 +2017,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- REGISTRO DE EVENTOS DE BOTONES ---
+
+  // Auth UI
+  DOM.authFormLogin.addEventListener('submit', handleAuthLogin);
+  DOM.authFormRegister.addEventListener('submit', handleAuthRegister);
+  DOM.btnAuthGoogle.addEventListener('click', handleAuthGoogle);
+  DOM.btnAuthSkip.addEventListener('click', handleAuthSkip);
+  document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchAuthTab(tab.dataset.mode));
+  });
 
   // Navegación Básica
   DOM.btnOpenSettings.addEventListener('click', () => navigateTo('settings'));

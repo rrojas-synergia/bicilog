@@ -28,19 +28,19 @@ async function initFirebase() {
       const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('CDN_TIMEOUT')), 5000));
 
       const appMod = await Promise.race([
-        import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'),
         timeout.catch(() => { throw new Error('CDN_TIMEOUT'); })
       ]);
       const { initializeApp } = appMod;
 
       const authMod = await Promise.race([
-        import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'),
+        import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'),
         timeout.catch(() => { throw new Error('CDN_TIMEOUT'); })
       ]);
-      const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } = authMod;
+      const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } = authMod;
 
       const mod = await Promise.race([
-        import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'),
+        import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js'),
         timeout.catch(() => { throw new Error('CDN_TIMEOUT'); })
       ]);
       const { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc } = mod;
@@ -59,7 +59,8 @@ async function initFirebase() {
 
       return {
         app: firebaseApp, auth: firebaseAuth, db: firebaseDB, firestore: firestoreMod,
-        signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
+        signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
+        GoogleAuthProvider, signInWithPopup
       };
     } catch (e) {
       console.warn('[Firebase] Init falló — Modo Local (offline):', e.message);
@@ -108,6 +109,15 @@ export const FBAuth = {
     const fb = await initFirebase();
     if (fb) await fb.signOut(fb.auth);
     this.currentUser = null;
+  },
+
+  async signInGoogle() {
+    const fb = await initFirebase();
+    if (!fb) throw new Error('Firebase no disponible');
+    const provider = new fb.GoogleAuthProvider();
+    const cred = await fb.signInWithPopup(fb.auth, provider);
+    this.currentUser = cred.user;
+    return cred.user;
   }
 };
 
@@ -124,7 +134,7 @@ export async function saveUserProfile(profile) {
       role: profile.role || 'rider',
       clubCode: profile.clubCode || '',
       broadcastTelemetry: !!profile.broadcastTelemetry,
-      displayName: profile.displayName || FBAuth.currentUser.email || '',
+      displayName: profile.displayName || profile.name || FBAuth.currentUser.displayName || FBAuth.currentUser.email || '',
       updatedAt: Date.now()
     }, { merge: true });
     return true;
