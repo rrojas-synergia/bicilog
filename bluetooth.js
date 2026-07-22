@@ -25,6 +25,8 @@ export const BiciSensors = {
   // Variables para el cálculo de cadencia (Crank Revolutions)
   lastCrankRevolutions: -1,
   lastCrankEventTime: -1,
+  cadenceBuffer: [],       // rolling average últimas 4 lecturas válidas
+  lastValidCadence: null,  // último RPM válido para fallback en rollover
 
   // Filtro de bici: solo conectar al sensor de cadencia vinculado al perfil seleccionado
   allowedCadenceDeviceId: null,
@@ -103,6 +105,8 @@ export const BiciSensors = {
         this.isCscConnected = false;
         this.lastCrankRevolutions = -1;
         this.lastCrankEventTime = -1;
+        this.cadenceBuffer = [];
+        this.lastValidCadence = null;
         
         if (this.isManualDisconnect) {
           console.log("[BLE] Desconexión manual de Cadencia detectada.");
@@ -363,6 +367,8 @@ export const BiciSensors = {
     }
     this.isHrConnected = false;
     this.isCscConnected = false;
+    this.cadenceBuffer = [];
+    this.lastValidCadence = null;
   },
 
   // Manejador centralizado de errores con Fallback iOS
@@ -387,40 +393,54 @@ export const BiciSensors = {
     }
   },
 
-  // Parseador de Cadencia
+  // Parseador de Cadencia (con rolling average y rollover protection)
   parseCadence(value) {
     const flags = value.getUint8(0);
     const hasWheelData = (flags & 0x01) !== 0;
     const hasCrankData = (flags & 0x02) !== 0;
-    
+
     let index = 1;
-    if (hasWheelData) index += 6; // Saltar rueda
-    
+    if (hasWheelData) index += 6;
+
     if (hasCrankData) {
       const cumulativeRevolutions = value.getUint16(index, true);
       const lastEventTime = value.getUint16(index + 2, true);
-      
-      let cadence = null;
-      
+
+      let rawCadence = null;
+
       if (this.lastCrankRevolutions !== -1 && this.lastCrankEventTime !== -1) {
         let diffRevs = cumulativeRevolutions - this.lastCrankRevolutions;
         if (diffRevs < 0) diffRevs += 65536;
-        
+
         let diffTime = lastEventTime - this.lastCrankEventTime;
         if (diffTime < 0) diffTime += 65536;
-        
+
         if (diffTime > 0 && diffRevs > 0) {
           const diffTimeSeconds = diffTime / 1024;
-          cadence = Math.round((diffRevs / diffTimeSeconds) * 60);
-          if (cadence > 220) cadence = null;
-        } else if (diffTime > 2048) {
-          cadence = 0;
+          rawCadence = Math.round((diffRevs / diffTimeSeconds) * 60);
+
+          // Rollover rejection + cap at 200 RPM
+          if (rawCadence > 200 || rawCadence < 0 || diffRevs > 200) {
+            rawCadence = null;
+          }
+        } else if (diffTime > 2048 && diffRevs === 0) {
+          rawCadence = 0;
         }
       }
-      
+
       this.lastCrankRevolutions = cumulativeRevolutions;
       this.lastCrankEventTime = lastEventTime;
-      return cadence;
+
+      // Rolling average: buffer de últimas 4 lecturas válidas
+      if (rawCadence !== null) {
+        this.cadenceBuffer.push(rawCadence);
+        if (this.cadenceBuffer.length > 4) this.cadenceBuffer.shift();
+        this.lastValidCadence = Math.round(this.cadenceBuffer.reduce((a, b) => a + b, 0) / this.cadenceBuffer.length);
+        return this.lastValidCadence;
+      }
+
+      // Rollover: devolver el último RPM válido (no mostrar null salvo buffer vacío)
+      return this.lastValidCadence;
     }
     return null;
   }

@@ -540,11 +540,21 @@ body {
 }
 
 .timer-value {
+  font-size: 28px;
   font-family: var(--font-sport);
-  font-size: 26px;
   font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
+  letter-spacing: 1px;
+  color: var(--text-main);
+}
+
+.timer-value.paused-state {
+  color: #A0AAB4;
+  animation: timerBlink 1.2s ease-in-out infinite;
+}
+
+@keyframes timerBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 /* Grid de métricas */

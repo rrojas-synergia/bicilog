@@ -703,17 +703,15 @@ function startWorkout() {
   // 1. Iniciar Cronómetro
   AppState.activeRide.timerInterval = setInterval(() => {
     if (AppState.settings.autoPause) {
-      // Auto-pausa solo si NO hay GPS, NI HR, NI cadencia
-      const noMovement = AppState.activeRide.speed < 2.0;
-      const noHr = AppState.activeRide.hr === 0;
-      const noCadence = AppState.activeRide.cadence === 0;
+      const stopped = AppState.activeRide.speed < 2.0;
 
-      if (noMovement && noHr && noCadence) {
+      if (stopped) {
         AppState.activeRide.autoPauseTicks++;
-        if (AppState.activeRide.autoPauseTicks >= 6 && !AppState.activeRide.isAutoPaused) {
+        if (AppState.activeRide.autoPauseTicks >= 4 && !AppState.activeRide.isAutoPaused) {
           AppState.activeRide.isAutoPaused = true;
           DOM.liveStatusBadge.textContent = 'AUTO-PAUSA';
           DOM.liveStatusBadge.className = 'status-indicator live-badge autopaused';
+          DOM.liveTimer.classList.add('paused-state');
         }
       } else {
         AppState.activeRide.autoPauseTicks = 0;
@@ -721,6 +719,7 @@ function startWorkout() {
           AppState.activeRide.isAutoPaused = false;
           DOM.liveStatusBadge.textContent = 'EN VIVO';
           DOM.liveStatusBadge.className = 'status-indicator live-badge';
+          DOM.liveTimer.classList.remove('paused-state');
         }
       }
     }
@@ -1373,16 +1372,15 @@ function resumeActiveSession(session) {
 
   AppState.activeRide.timerInterval = setInterval(() => {
     if (AppState.settings.autoPause) {
-      const noMovement = AppState.activeRide.speed < 2.0;
-      const noHr = AppState.activeRide.hr === 0;
-      const noCadence = AppState.activeRide.cadence === 0;
+      const stopped = AppState.activeRide.speed < 2.0;
 
-      if (noMovement && noHr && noCadence) {
+      if (stopped) {
         AppState.activeRide.autoPauseTicks++;
-        if (AppState.activeRide.autoPauseTicks >= 6 && !AppState.activeRide.isAutoPaused) {
+        if (AppState.activeRide.autoPauseTicks >= 4 && !AppState.activeRide.isAutoPaused) {
           AppState.activeRide.isAutoPaused = true;
           DOM.liveStatusBadge.textContent = 'AUTO-PAUSA';
           DOM.liveStatusBadge.className = 'status-indicator live-badge autopaused';
+          DOM.liveTimer.classList.add('paused-state');
         }
       } else {
         AppState.activeRide.autoPauseTicks = 0;
@@ -1390,6 +1388,7 @@ function resumeActiveSession(session) {
           AppState.activeRide.isAutoPaused = false;
           DOM.liveStatusBadge.textContent = 'EN VIVO';
           DOM.liveStatusBadge.className = 'status-indicator live-badge';
+          DOM.liveTimer.classList.remove('paused-state');
         }
       }
     }
