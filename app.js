@@ -228,6 +228,7 @@ const DOM = {
   sosOverlay: document.getElementById('sos-overlay'),
   sosCountdownEl: document.getElementById('sos-countdown'),
   sosBtnCancel: document.getElementById('sos-btn-cancel'),
+  btnSosManual: document.getElementById('btn-sos-manual'),
 
   // Auth UI
   authFormLogin: document.getElementById('auth-form-login'),
@@ -1860,19 +1861,34 @@ function closeCoachDashboard() {
 function triggerSOS() {
   if (AppState.sosCountdown > 0) return;
   AppState.sosCountdown = 15;
+  startSOSCountdown(15, () => {
+    sendSOSAlert('⚠️ Caída detectada por BiciLog');
+  });
+}
 
+// --- SOS MANUAL (Botón rojo, 5s countdown) ---
+
+function triggerManualSOS() {
+  if (AppState.sosCountdown > 0) return;
+  AppState.sosCountdown = 5;
+  DOM.sosBtnCancel.textContent = 'CANCELAR';
+  startSOSCountdown(5, () => {
+    sendManualSOSAlert();
+  });
+}
+
+function startSOSCountdown(seconds, onExpire) {
   DOM.sosOverlay.classList.remove('hide');
-  DOM.sosCountdownEl.textContent = '15';
+  DOM.sosCountdownEl.textContent = String(seconds);
   DOM.sosBtnCancel.classList.remove('hide');
 
-  // Beep de emergencia
   try {
     AppState.sosAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
   } catch(e) { AppState.sosAudioCtx = null; }
 
   AppState.sosInterval = setInterval(() => {
     AppState.sosCountdown--;
-    DOM.sosCountdownEl.textContent = AppState.sosCountdown;
+    DOM.sosCountdownEl.textContent = String(AppState.sosCountdown);
 
     if (AppState.sosAudioCtx) {
       const osc = AppState.sosAudioCtx.createOscillator();
@@ -1889,7 +1905,7 @@ function triggerSOS() {
     if (AppState.sosCountdown <= 0) {
       clearInterval(AppState.sosInterval);
       AppState.sosInterval = null;
-      sendSOSAlert();
+      onExpire();
     }
   }, 1000);
 }
@@ -1900,15 +1916,44 @@ function cancelSOS() {
   AppState.sosCountdown = 0;
   if (AppState.sosAudioCtx) { AppState.sosAudioCtx.close().catch(() => {}); AppState.sosAudioCtx = null; }
   DOM.sosOverlay.classList.add('hide');
+  DOM.sosBtnCancel.textContent = 'ESTOY BIEN — CANCELAR';
 }
 
-function sendSOSAlert() {
+function sendSOSAlert(reason) {
   DOM.sosOverlay.classList.add('hide');
   const lat = AppState.activeRide.lat || 0;
   const lon = AppState.activeRide.lon || 0;
   const mapsUrl = `https://maps.google.com/?q=${lat},${lon}`;
-  const msg = encodeURIComponent(`🚨 EMERGENCIA BICILOG: Posible caída detectada.\nUbicación: ${mapsUrl}\nVelocidad: ${AppState.activeRide.speed.toFixed(1)} km/h`);
+  const msg = encodeURIComponent(`🚨 EMERGENCIA BICILOG: ${reason}.\nUbicación: ${mapsUrl}\nVelocidad: ${AppState.activeRide.speed.toFixed(1)} km/h`);
   window.open(`https://wa.me/?text=${msg}`, '_blank');
+}
+
+async function sendManualSOSAlert() {
+  DOM.sosOverlay.classList.add('hide');
+  const lat = AppState.activeRide.lat || 0;
+  const lon = AppState.activeRide.lon || 0;
+
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+  const msg = `🚨 EMERGENCIA BiciLog: Necesito ayuda. Esta es mi ubicación actual: ${mapsUrl}`;
+
+  // Firestore emergency flag (si hay red y usuario autenticado)
+  if (navigator.onLine && FBAuth.currentUser) {
+    try {
+      await updateLiveTelemetry({
+        lat, lon,
+        speed: AppState.activeRide.speed,
+        hr: AppState.activeRide.hr,
+        cadence: AppState.activeRide.cadence,
+        zone: 0,
+        distance: AppState.activeRide.distance,
+        elapsed: AppState.activeRide.elapsedSeconds,
+        emergency: true
+      });
+    } catch (_) { /* silent */ }
+  }
+
+  // WhatsApp deep link
+  window.location.href = `whatsapp://send?text=${encodeURIComponent(msg)}`;
 }
 
 // --- PIPELINE DE SINCRONIZACIÓN DE ACTIVIDADES ---
@@ -2135,6 +2180,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // SOS cancel
   DOM.sosBtnCancel.addEventListener('click', () => cancelSOS());
+  DOM.btnSosManual.addEventListener('click', () => triggerManualSOS());
 
   // Club & Telemetry
   DOM.btnJoinClub.addEventListener('click', () => handleJoinClub());

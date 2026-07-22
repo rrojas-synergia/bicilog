@@ -221,6 +221,7 @@ export async function updateLiveTelemetry(telemetry) {
       cadence: telemetry.cadence || 0,
       distance: telemetry.distance || 0,
       elapsed: telemetry.elapsed || 0,
+      emergencyStatus: !!telemetry.emergency,
       updatedAt: Date.now()
     }, { merge: true });
   } catch (e) { console.warn('[Telemetry] Error enviando:', e.message); }

@@ -750,6 +750,21 @@ input:checked + .slider:before {
   color: #FFFFFF;
 }
 
+.sos-manual-btn {
+  background-color: var(--color-danger);
+  color: #FFFFFF;
+  font-family: var(--font-sport);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  animation: sosPulseBg 1.5s ease-in-out infinite;
+}
+
+@keyframes sosPulseBg {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.6); }
+  50% { box-shadow: 0 0 0 12px rgba(255, 107, 107, 0); }
+}
+
 .hide {
   display: none !important;
 }
