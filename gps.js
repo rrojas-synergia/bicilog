@@ -77,8 +77,12 @@ export const BiciGPS = {
         }
       },
       (error) => {
-        console.error("Error de sensor GPS nativo:", error);
-        if (onError) onError(error);
+        // Firewall GPS: el watcher NUNCA se detiene, el error se aísla
+        console.warn("[GPS] Error temporal (watcher sigue activo):", error.code, error.message);
+        if (onError) {
+          // Notificar a la UI sin detener el flujo
+          onError({ code: error.code, message: error.message });
+        }
       },
       options
     );

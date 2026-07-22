@@ -49,14 +49,23 @@ export const BiciSensors = {
       this.checkBluetoothSupport();
       this.isManualDisconnect = false;
 
+      // Anti-zombie: limpiar conexión previa si existe
+      if (this.hrDevice && this.hrDevice.gatt && this.hrDevice.gatt.connected) {
+        console.log('[BLE] Desconectando zombie HR previo...');
+        try { this.hrDevice.gatt.disconnect(); } catch(_) {}
+        await new Promise(r => setTimeout(r, 300));
+      }
+
       console.log("[BLE] Solicitando pulsómetro con filtrado estricto GATT 0x180D...");
       this.hrDevice = await navigator.bluetooth.requestDevice({
         filters: [{ services: ['heart_rate'] }]
       });
 
-      return await this.establishHrConnection(this.hrDevice, onValue, onDisconnect, false);
+      return await this.establishHrConnection(this.hrDevice, onValue, onDisconnect);
     } catch (error) {
+      console.warn('[BLE] Error FC (aislado):', error.message);
       this.handleBleError(error, "Frecuencia Cardíaca");
+      return null;
     }
   },
 
@@ -66,14 +75,22 @@ export const BiciSensors = {
       this.checkBluetoothSupport();
       this.isManualDisconnect = false;
 
+      if (this.cscDevice && this.cscDevice.gatt && this.cscDevice.gatt.connected) {
+        console.log('[BLE] Desconectando zombie CSC previo...');
+        try { this.cscDevice.gatt.disconnect(); } catch(_) {}
+        await new Promise(r => setTimeout(r, 300));
+      }
+
       console.log("[BLE] Solicitando sensor de cadencia con filtrado estricto GATT 0x1816...");
       this.cscDevice = await navigator.bluetooth.requestDevice({
         filters: [{ services: ['cycling_speed_and_cadence'] }]
       });
 
-      return await this.establishCscConnection(this.cscDevice, onValue, onDisconnect, false);
+      return await this.establishCscConnection(this.cscDevice, onValue, onDisconnect);
     } catch (error) {
+      console.warn('[BLE] Error Cadencia (aislado):', error.message);
       this.handleBleError(error, "Cadencia");
+      return null;
     }
   },
 
@@ -226,6 +243,9 @@ export const BiciSensors = {
     device.removeEventListener('gattserverdisconnected', this.onHrDisconnect);
     device.addEventListener('gattserverdisconnected', this.onHrDisconnect);
 
+    // Delay de 500ms para que el stack BLE de iOS/Bluefy se estabilice
+    await new Promise(r => setTimeout(r, 500));
+
     this.hrServer = await device.gatt.connect();
     const service = await this.hrServer.getPrimaryService('heart_rate');
     this.hrCharacteristic = await service.getCharacteristic('heart_rate_measurement');
@@ -258,6 +278,8 @@ export const BiciSensors = {
     this.cscCallbacks = { onValue, onDisconnect };
     device.removeEventListener('gattserverdisconnected', this.onCscDisconnect);
     device.addEventListener('gattserverdisconnected', this.onCscDisconnect);
+
+    await new Promise(r => setTimeout(r, 500));
 
     this.cscServer = await device.gatt.connect();
     const service = await this.cscServer.getPrimaryService('cycling_speed_and_cadence');
@@ -376,10 +398,10 @@ export const BiciSensors = {
     console.error(`Error de conexión BLE (${sensorName}):`, error);
     if (error.message === "iOS_UNSUPPORTED") {
       alert(`Web Bluetooth no es soportado por Apple en Safari. Para conectar tus sensores en iPhone, descarga la App gratuita "Bluefy" desde la App Store.`);
-    } else {
+    } else if (error.name !== 'NotFoundError') {
       alert(`No se pudo conectar el sensor de ${sensorName}. Verifica que esté encendido y que el Bluetooth del dispositivo esté activado.`);
     }
-    throw error;
+    // NUNCA lanzar — el error queda aislado, el thread principal sigue vivo
   },
 
   // Parseador de Frecuencia Cardíaca
