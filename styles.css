@@ -1170,6 +1170,18 @@ input:checked + .slider:before {
   padding: 16px;
   gap: 12px;
   box-shadow: 0 2px 6px var(--color-shadow);
+  cursor: pointer;
+}
+
+.sensor-crud-item.bike-selected {
+  border: 2px solid #11caa0;
+  background-color: #E8FDF6;
+}
+
+.bike-checkmark {
+  color: #11caa0;
+  font-weight: 800;
+  margin-right: 4px;
 }
 
 .sensor-crud-info {

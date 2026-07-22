@@ -1558,15 +1558,18 @@ async function loadBikesScreen() {
 
   AppState.bikeProfiles.forEach(bike => {
     const item = document.createElement('div');
-    item.className = 'sensor-crud-item';
+    const isSelected = bike.id === AppState.selectedBikeProfileId;
+    item.className = 'sensor-crud-item' + (isSelected ? ' bike-selected' : '');
     const icon = bike.type === 'mtb' ? '⛰️' : '🚴';
     const typeLabel = bike.type === 'mtb' ? 'Montaña' : 'Ruta';
+
+    const checkmark = isSelected ? '<span class="bike-checkmark">✓</span>' : '';
 
     item.innerHTML = `
       <div class="sensor-crud-info">
         <span class="sensor-crud-icon" style="font-size: 24px;">${icon}</span>
         <div class="sensor-crud-details">
-          <span class="sensor-crud-alias">${bike.name}</span>
+          <span class="sensor-crud-alias">${checkmark} ${bike.name}</span>
           <span class="sensor-crud-original">${typeLabel}${bike.cadenceDeviceId ? ' · Sensor cadencia vinculado' : ''}</span>
         </div>
       </div>
@@ -1576,8 +1579,17 @@ async function loadBikesScreen() {
       </div>
     `;
 
-    item.querySelector('.edit').addEventListener('click', () => openBikeModal(bike));
-    item.querySelector('.delete').addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.edit') || e.target.closest('.delete')) return;
+      selectBikeFromList(bike.id);
+    });
+
+    item.querySelector('.edit').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openBikeModal(bike);
+    });
+    item.querySelector('.delete').addEventListener('click', (e) => {
+      e.stopPropagation();
       if (confirm(`¿Eliminar "${bike.name}"?`)) {
         DB.deleteBikeProfile(bike.id).then(() => {
           if (AppState.selectedBikeProfileId === bike.id) AppState.selectedBikeProfileId = null;
@@ -1589,6 +1601,18 @@ async function loadBikesScreen() {
 
     DOM.bikesCrudList.appendChild(item);
   });
+}
+
+function selectBikeFromList(bikeId) {
+  AppState.selectedBikeProfileId = bikeId;
+  const bike = AppState.bikeProfiles.find(b => b.id === bikeId);
+  BiciSensors.setBikeCadenceDevice(bike ? bike.cadenceDeviceId : null);
+  populateBikeSelector();
+  loadBikesScreen(); // refresca el ✓
+
+  // Volver a la pantalla anterior (sin destruir estado de rodada)
+  navigateTo(AppState.previousScreen || 'dashboard');
+  AppState.previousScreen = null;
 }
 
 async function openBikeModal(bike = null) {
@@ -2096,8 +2120,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   DOM.btnSensorsBack.addEventListener('click', () => navigateTo('settings'));
-  DOM.btnGotoBikes.addEventListener('click', () => navigateTo('bikes'));
-  DOM.btnBikesBack.addEventListener('click', () => navigateTo('settings'));
+  DOM.btnGotoBikes.addEventListener('click', () => {
+    AppState.previousScreen = AppState.currentScreen;
+    navigateTo('bikes');
+  });
+  DOM.btnBikesBack.addEventListener('click', () => {
+    navigateTo(AppState.previousScreen || 'settings');
+    AppState.previousScreen = null;
+  });
 
   // Selector de bici
   DOM.bikeProfileSelect.addEventListener('change', () => {
@@ -2109,6 +2139,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   DOM.btnBikeManage.addEventListener('click', (e) => {
     e.stopPropagation();
+    AppState.previousScreen = AppState.currentScreen;
     navigateTo('bikes');
   });
 
