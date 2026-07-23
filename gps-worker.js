@@ -411,7 +411,7 @@ self.onmessage = function (e) {
       // Umbral de velocidad en ciclismo: ignoramos acumulación si la velocidad calculada es < 1.5 km/h
       const estSpeed = timeDiff > 0 ? (pointDistance * 3600) / timeDiff : 0;
       
-      if (estSpeed > 1.5) {
+      if (estSpeed > 1.5 && !isNaN(pointDistance) && isFinite(pointDistance)) {
         totalDistance += pointDistance;
         if (!hasRawSpeed) {
           calculatedSpeed = estSpeed;
@@ -471,14 +471,14 @@ self.onmessage = function (e) {
     self.postMessage({
       type: 'GPS_PROCESSED',
       data: {
-        lat: filteredLat,
-        lon: filteredLon,
-        alt: filteredAlt,
-        speed: calculatedSpeed,
-        distance: totalDistance,
-        ascent: totalAscent,
-        grade: grade,
-        power: power,
+        lat: Number(filteredLat) || 0,
+        lon: Number(filteredLon) || 0,
+        alt: Number(filteredAlt) || 0,
+        speed: Number(calculatedSpeed) || 0,
+        distance: Number(totalDistance) || 0,
+        ascent: Number(totalAscent) || 0,
+        grade: Number(grade) || 0,
+        power: Number(power) || 0,
         accuracy: accuracy,
         climbInfo: climbInfo
       }

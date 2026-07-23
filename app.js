@@ -1020,6 +1020,7 @@ function triggerSilentBluetoothReconnect() {
 
   BiciSensors.silentReconnect(
     (hrVal) => {
+      if (hrVal === null) { DOM.liveHr.textContent = '--'; AppState.activeRide.hr = 0; DOM.hrMetricBox.style.borderLeft = '6px solid var(--color-border)'; return; }
       AppState.activeRide.hr = hrVal;
       DOM.liveHr.textContent = hrVal;
       
@@ -1038,6 +1039,7 @@ function triggerSilentBluetoothReconnect() {
       DOM.liveRespiration.textContent = respRate;
     },
     (cadVal) => {
+      if (cadVal === null) { DOM.liveCadence.textContent = '--'; AppState.activeRide.cadence = 0; return; }
       AppState.activeRide.cadence = cadVal;
       DOM.liveCadence.textContent = cadVal;
     },
@@ -1084,6 +1086,7 @@ async function toggleHRConnection() {
     try {
       const device = await BiciSensors.connectHeartRate(
         (hrValue) => {
+          if (hrValue === null) { DOM.liveHr.textContent = '--'; AppState.activeRide.hr = 0; return; }
           AppState.activeRide.hr = hrValue;
           DOM.liveHr.textContent = hrValue;
 
@@ -1285,9 +1288,9 @@ function resumeActiveSession(session) {
     isAutoPaused: false,
     autoPauseTicks: 0,
     timerInterval: null,
-    elapsedSeconds: session.elapsedSeconds,
-    distance: session.distance,
-    ascent: session.ascent,
+    elapsedSeconds: Number(session.elapsedSeconds) || 0,
+    distance: Number(session.distance) || 0,
+    ascent: Number(session.ascent) || 0,
     grade: 0,
     power: 0,
     hr: session.hr,

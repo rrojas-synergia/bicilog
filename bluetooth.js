@@ -10,6 +10,11 @@ export const BiciSensors = {
   hrCharacteristic: null,
   cscCharacteristic: null,
 
+  // Watchdog anti-stale data
+  hrWatchdog: null,
+  cscWatchdog: null,
+  WATCHDOG_MS: 5000,
+
   // Estados y callbacks de reconexión
   isHrConnected: false,
   isCscConnected: false,
@@ -250,9 +255,22 @@ export const BiciSensors = {
     const service = await this.hrServer.getPrimaryService('heart_rate');
     this.hrCharacteristic = await service.getCharacteristic('heart_rate_measurement');
     
+    // Watchdog: Si pasan 5s sin paquete, el sensor se considera caído
+    const resetWatchdog = () => {
+      if (this.hrWatchdog) clearTimeout(this.hrWatchdog);
+      this.hrWatchdog = setTimeout(() => {
+        console.warn('[BLE Watchdog] HR sin datos por 5s — marcando como desconectado.');
+        this.isHrConnected = false;
+        if (onValue) onValue(null);
+        this.updateStatus('hr', 'disconnected', device.name || 'Pulsómetro');
+        this.reconnectDevice(device, 'hr', onValue, onDisconnect);
+      }, this.WATCHDOG_MS);
+    };
+
     this.hrCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
       const value = event.target.value;
       const hr = this.parseHeartRate(value);
+      resetWatchdog();
       if (onValue) onValue(hr);
     });
 
@@ -285,9 +303,25 @@ export const BiciSensors = {
     const service = await this.cscServer.getPrimaryService('cycling_speed_and_cadence');
     this.cscCharacteristic = await service.getCharacteristic('csc_measurement');
 
+    const resetCscWatchdog = () => {
+      if (this.cscWatchdog) clearTimeout(this.cscWatchdog);
+      this.cscWatchdog = setTimeout(() => {
+        console.warn('[BLE Watchdog] Cadence sin datos por 5s — marcando como desconectado.');
+        this.isCscConnected = false;
+        this.lastCrankRevolutions = -1;
+        this.lastCrankEventTime = -1;
+        this.cadenceBuffer = [];
+        this.lastValidCadence = null;
+        if (onValue) onValue(null);
+        this.updateStatus('cadence', 'disconnected', device.name || 'Sensor Cadencia');
+        this.reconnectDevice(device, 'cadence', onValue, onDisconnect);
+      }, this.WATCHDOG_MS);
+    };
+
     this.cscCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
       const value = event.target.value;
       const cadence = this.parseCadence(value);
+      resetCscWatchdog();
       if (cadence !== null && onValue) {
         onValue(cadence);
       }
@@ -381,6 +415,8 @@ export const BiciSensors = {
     this.isManualDisconnect = true;
     this.isHrReconnecting = false;
     this.isCscReconnecting = false;
+    if (this.hrWatchdog) { clearTimeout(this.hrWatchdog); this.hrWatchdog = null; }
+    if (this.cscWatchdog) { clearTimeout(this.cscWatchdog); this.cscWatchdog = null; }
     if (this.hrDevice && this.hrDevice.gatt.connected) {
       this.hrDevice.gatt.disconnect();
     }
