@@ -288,7 +288,8 @@ function updateGpsAccuracyUI(accuracy) {
   }
   const m = Math.round(accuracy);
   DOM.gpsAccuracy.textContent = `GPS: ${m}m`;
-  DOM.gpsAccuracy.style.color = m < 30 ? 'var(--color-success)' : '#FF9F43';
+  // Verde: bloqueo satelital fino (< 20m). Ámbar: esperando mejor lock (20-60m).
+  DOM.gpsAccuracy.style.color = m < 20 ? '#1DD1A1' : '#FF9F43';
 }
 
 function updateLiveClock() {
@@ -998,13 +999,20 @@ function stopWorkout() {
 
 // Resetear UI de pastillas
 function resetPillsUI() {
-  DOM.sensorPillHr.className = 'sensor-connect-pill';
-  DOM.sensorPillHr.querySelector('.sensor-status-text').textContent = 'FC: Desconectado';
-  DOM.btnConnectHr.textContent = 'Emparejar';
+  resetPillUI('hr');
+  resetPillUI('cadence');
+}
 
-  DOM.sensorPillCsc.className = 'sensor-connect-pill';
-  DOM.sensorPillCsc.querySelector('.sensor-status-text').textContent = 'Cad: Desconectado';
-  DOM.btnConnectCsc.textContent = 'Emparejar';
+function resetPillUI(type) {
+  if (type === 'hr') {
+    DOM.sensorPillHr.className = 'sensor-connect-pill';
+    DOM.sensorPillHr.querySelector('.sensor-status-text').textContent = 'FC: Desconectado';
+    DOM.btnConnectHr.textContent = 'Emparejar';
+  } else {
+    DOM.sensorPillCsc.className = 'sensor-connect-pill';
+    DOM.sensorPillCsc.querySelector('.sensor-status-text').textContent = 'Cad: Desconectado';
+    DOM.btnConnectCsc.textContent = 'Emparejar';
+  }
 }
 
 // --- CONEXIONES BLUETOOTH Y AUTO-CONEXIÓN ---
@@ -1077,8 +1085,8 @@ function updateSensorPillState(type, status, displayName) {
 
 async function toggleHRConnection() {
   if (BiciSensors.isHrConnected) {
-    BiciSensors.disconnectAll();
-    resetPillsUI();
+    BiciSensors.disconnectHR();
+    resetPillUI('hr');
   } else {
     DOM.btnConnectHr.textContent = 'Buscando...';
     DOM.sensorPillHr.className = 'sensor-connect-pill';
@@ -1125,8 +1133,8 @@ async function toggleHRConnection() {
 
 async function toggleCSCConnection() {
   if (BiciSensors.isCscConnected) {
-    BiciSensors.disconnectAll();
-    resetPillsUI();
+    BiciSensors.disconnectCSC();
+    resetPillUI('cadence');
   } else {
     DOM.btnConnectCsc.textContent = 'Buscando...';
     DOM.sensorPillCsc.className = 'sensor-connect-pill';

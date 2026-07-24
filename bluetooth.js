@@ -417,16 +417,28 @@ export const BiciSensors = {
     this.isCscReconnecting = false;
     if (this.hrWatchdog) { clearTimeout(this.hrWatchdog); this.hrWatchdog = null; }
     if (this.cscWatchdog) { clearTimeout(this.cscWatchdog); this.cscWatchdog = null; }
-    if (this.hrDevice && this.hrDevice.gatt.connected) {
-      this.hrDevice.gatt.disconnect();
-    }
-    if (this.cscDevice && this.cscDevice.gatt.connected) {
-      this.cscDevice.gatt.disconnect();
-    }
+    this.disconnectHR();
+    this.disconnectCSC();
+  },
+
+  disconnectHR() {
     this.isHrConnected = false;
+    if (this.hrWatchdog) { clearTimeout(this.hrWatchdog); this.hrWatchdog = null; }
+    if (this.hrDevice && this.hrDevice.gatt && this.hrDevice.gatt.connected) {
+      try { this.hrDevice.gatt.disconnect(); } catch(_) {}
+    }
+  },
+
+  disconnectCSC() {
     this.isCscConnected = false;
+    this.lastCrankRevolutions = -1;
+    this.lastCrankEventTime = -1;
     this.cadenceBuffer = [];
     this.lastValidCadence = null;
+    if (this.cscWatchdog) { clearTimeout(this.cscWatchdog); this.cscWatchdog = null; }
+    if (this.cscDevice && this.cscDevice.gatt && this.cscDevice.gatt.connected) {
+      try { this.cscDevice.gatt.disconnect(); } catch(_) {}
+    }
   },
 
   // Manejador centralizado de errores con Fallback iOS
