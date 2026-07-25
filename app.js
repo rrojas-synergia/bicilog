@@ -704,7 +704,7 @@ function startWorkout() {
   // 1. Iniciar Cronómetro
   AppState.activeRide.timerInterval = setInterval(() => {
     if (AppState.settings.autoPause) {
-      const stopped = AppState.activeRide.speed < 2.0;
+      const stopped = AppState.activeRide.speed < 0.5;
 
       if (stopped) {
         AppState.activeRide.autoPauseTicks++;
@@ -731,7 +731,7 @@ function startWorkout() {
       AppState.activeRide.elapsedSeconds++;
       DOM.liveTimer.textContent = BiciCharts.formatDuration(AppState.activeRide.elapsedSeconds);
 
-      if (AppState.activeRide.speed > 2) {
+      if (AppState.activeRide.speed > 0.5) {
         AppState.activeRide.movingTimeSeconds = (AppState.activeRide.movingTimeSeconds || 0) + 1;
       }
       DOM.liveMovingTime.textContent = BiciCharts.formatDuration(AppState.activeRide.movingTimeSeconds || 0);
@@ -797,8 +797,7 @@ function startWorkout() {
     BiciGPS.startTracking(
       AppState.settings,
       (gpsData) => {
-        if (AppState.activeRide.isAutoPaused) return;
-
+        // Distancia y velocidad SIEMPRE se actualizan, incluso en auto-pausa
         AppState.activeRide.speed = gpsData.speed;
         AppState.activeRide.distance = gpsData.distance;
         AppState.activeRide.ascent = gpsData.ascent;
@@ -886,8 +885,6 @@ function resumeWorkout() {
     BiciGPS.startTracking(
       AppState.settings,
       (gpsData) => {
-        if (AppState.activeRide.isAutoPaused) return;
-
         AppState.activeRide.speed = gpsData.speed;
         AppState.activeRide.distance = gpsData.distance;
         AppState.activeRide.ascent = gpsData.ascent;
@@ -946,7 +943,7 @@ function stopWorkout() {
     rideData.samples.push({ time: rideData.elapsedSeconds, hr: rideData.hr || 70, speed: rideData.speed || 0, cadence: rideData.cadence || 0 });
   }
 
-  const movingSamples = rideData.samples.filter(s => s.speed > 2);
+  const movingSamples = rideData.samples.filter(s => s.speed > 0.5);
   const movingTime = movingSamples.length * 5; // segundos (intervalo de muestreo 5s)
 
   const hrs = rideData.samples.map(s => s.hr).filter(h => h > 0);
@@ -1352,8 +1349,6 @@ function resumeActiveSession(session) {
     BiciGPS.startTracking(
       AppState.settings,
       (gpsData) => {
-        if (AppState.activeRide.isAutoPaused) return;
-
         AppState.activeRide.speed = gpsData.speed;
         AppState.activeRide.distance = gpsData.distance;
         AppState.activeRide.ascent = gpsData.ascent;
@@ -1383,7 +1378,7 @@ function resumeActiveSession(session) {
 
   AppState.activeRide.timerInterval = setInterval(() => {
     if (AppState.settings.autoPause) {
-      const stopped = AppState.activeRide.speed < 2.0;
+      const stopped = AppState.activeRide.speed < 0.5;
 
       if (stopped) {
         AppState.activeRide.autoPauseTicks++;
@@ -2262,8 +2257,6 @@ document.addEventListener('DOMContentLoaded', () => {
         BiciGPS.startTracking(
           AppState.settings,
           (gpsData) => {
-            if (AppState.activeRide.isAutoPaused) return;
-
             AppState.activeRide.speed = gpsData.speed;
             AppState.activeRide.distance = gpsData.distance;
             AppState.activeRide.ascent = gpsData.ascent;
