@@ -40,7 +40,7 @@ let altitudeHistory = []; // Para media móvil de altitud
 // Warm-up: Los primeros 3 puntos consecutivos válidos deben pasar el filtro de
 // velocidad física entre sí antes de encender los Kalman y acumular distancia.
 const WARMUP_QUEUE = [];
-const WARMUP_SIZE = 3;
+const WARMUP_SIZE = 2;
 
 // Configuración de la bicicleta y ciclista (valores por defecto)
 let riderWeight = 70; // kg
@@ -293,7 +293,7 @@ self.onmessage = function (e) {
 
     // --- WARM-UP: validar los primeros 3 puntos antes de encender la lógica ---
     if (WARMUP_QUEUE.length < WARMUP_SIZE) {
-      if (accuracy !== undefined && accuracy !== null && accuracy > 60) {
+      if (accuracy !== undefined && accuracy !== null && accuracy > 25) {
         console.warn(`[Worker Warmup] Punto descartado por precisión (${accuracy.toFixed(0)}m). Reiniciando warm-up.`);
         WARMUP_QUEUE.length = 0;
         return;
@@ -336,8 +336,8 @@ self.onmessage = function (e) {
 
     // --- FILTROS ESTRICTOS (post warm-up) ---
     // Filtro 1: Precisión
-    if (accuracy !== undefined && accuracy !== null && accuracy > 60) {
-      console.warn(`[Worker] Coordenada descartada por baja precisión (${accuracy.toFixed(1)}m > 60m)`);
+    if (accuracy !== undefined && accuracy !== null && accuracy > 25) {
+      console.warn(`[Worker] Coordenada descartada por baja precisión (${accuracy.toFixed(1)}m > 25m)`);
       return;
     }
 
@@ -404,31 +404,23 @@ self.onmessage = function (e) {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       pointDistance = R * c;
 
-      // Filtro de deriva estática (Jitter filter):
-      // Si la distancia es ínfima (< 1.5 metros por segundo) y no hay velocidad real, ignorar cambio
-      const timeDiff = (timestamp - lastPoint.timestamp) / 1000; // en segundos
-      
-      // Umbral de velocidad en ciclismo: ignoramos acumulación si la velocidad calculada es < 1.5 km/h
-      const estSpeed = timeDiff > 0 ? (pointDistance * 3600) / timeDiff : 0;
-      
-      if (estSpeed > 1.5 && !isNaN(pointDistance) && isFinite(pointDistance)) {
+      // Acumular distancia puramente por coordenadas (no bloqueada por velocidad)
+      if (!isNaN(pointDistance) && isFinite(pointDistance) && pointDistance > 0) {
         totalDistance += pointDistance;
+        console.log(`[GPS] Salto válido: ${(pointDistance * 1000).toFixed(1)}m | Total: ${totalDistance.toFixed(3)} km`);
         if (!hasRawSpeed) {
-          calculatedSpeed = estSpeed;
+          const timeDiff = (timestamp - lastPoint.timestamp) / 1000;
+          calculatedSpeed = timeDiff > 0 ? (pointDistance * 3600) / timeDiff : 0;
         }
       } else {
         pointDistance = 0;
-        // Si no hay movimiento real estimado y la velocidad GPS nativa es baja/cero, forzar a 0
-        if (!hasRawSpeed || calculatedSpeed < 1.5) {
-          calculatedSpeed = 0;
-        }
+        if (!hasRawSpeed) calculatedSpeed = 0;
       }
 
       // Calcular Ascenso (desnivel acumulado positivo)
       if (filteredAlt !== null && lastPoint.alt !== null) {
         const altDiff = filteredAlt - lastPoint.alt;
-        // Acumular desnivel solo si sube y la velocidad indica movimiento
-        if (altDiff > 0.3 && calculatedSpeed > 1.5) {
+        if (altDiff > 0.3 && pointDistance > 0) {
           totalAscent += altDiff;
         }
       }

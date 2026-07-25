@@ -288,8 +288,7 @@ function updateGpsAccuracyUI(accuracy) {
   }
   const m = Math.round(accuracy);
   DOM.gpsAccuracy.textContent = `GPS: ${m}m`;
-  // Verde: bloqueo satelital fino (< 20m). Ámbar: esperando mejor lock (20-60m).
-  DOM.gpsAccuracy.style.color = m < 20 ? '#1DD1A1' : '#FF9F43';
+  DOM.gpsAccuracy.style.color = m < 10 ? '#1DD1A1' : '#FF9F43';
 }
 
 function updateLiveClock() {

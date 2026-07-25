@@ -107,7 +107,7 @@ export const BiciGPS = {
     let totalDist = 0;
     let totalAscent = 0;
 
-    const MAX_ACCURACY_M = 60;
+    const MAX_ACCURACY_M = 25;
     const MAX_SPEED_KMH = 120;   // imposible en bicicleta
     const MIN_DIST_KM = 0.001;   // ~1 metro mínimo para acumular
     const R = 6371;
@@ -155,17 +155,18 @@ export const BiciGPS = {
           // Velocidad: priorizar dato nativo del GPS
           let speedKmh = hasRawSpeed ? coords.speed * 3.6 : implicitSpeed;
 
-          // Anti-jitter: descartar micro-desplazamientos en reposo
-          if (implicitSpeed < 1.5) {
-            speedKmh = 0;
-          } else if (segmentKm > MIN_DIST_KM) {
+          // Acumular distancia por coordenadas (sin jitter filter)
+          if (segmentKm >= MIN_DIST_KM) {
             totalDist += segmentKm;
+            console.log(`[GPS Fallback] Salto: ${(segmentKm*1000).toFixed(1)}m | Total: ${totalDist.toFixed(3)} km`);
+          } else {
+            speedKmh = 0;
           }
 
           // Ascenso acumulado positivo
           if (coords.altitude !== null && lastValid.alt !== null) {
             const altDiff = coords.altitude - lastValid.alt;
-            if (altDiff > 0.3 && speedKmh > 1.5) totalAscent += altDiff;
+            if (altDiff > 0.3 && segmentKm >= MIN_DIST_KM) totalAscent += altDiff;
           }
 
           // Pendiente instantánea
