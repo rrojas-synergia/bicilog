@@ -4,6 +4,9 @@ export const BiciGPS = {
   watchId: null,
   worker: null,
 
+  // Raw accuracy callback para UI antes del filtro
+  onAccuracyUpdate: null,
+
   // Iniciar el seguimiento por GPS canalizando los datos al Web Worker
   startTracking(settings, onPositionUpdate, onError) {
     if (!navigator.geolocation) {
@@ -53,7 +56,7 @@ export const BiciGPS = {
 
     const options = {
       enableHighAccuracy: true,
-      timeout: 5000,
+      timeout: 15000,
       maximumAge: 0
     };
 
@@ -61,7 +64,12 @@ export const BiciGPS = {
     this.watchId = navigator.geolocation.watchPosition(
       (position) => {
         const coords = position.coords;
-        
+
+        // Actualizar UI de accuracy ANTES del filtro (para que el usuario vea progreso)
+        if (this.onAccuracyUpdate) {
+          this.onAccuracyUpdate(coords.accuracy);
+        }
+
         if (this.worker) {
           this.worker.postMessage({
             type: 'GPS_RAW',
@@ -125,6 +133,10 @@ export const BiciGPS = {
       (position) => {
         const coords = position.coords;
         const accuracy = coords.accuracy !== null ? coords.accuracy : 999;
+
+        if (this.onAccuracyUpdate) {
+          this.onAccuracyUpdate(coords.accuracy);
+        }
 
         // --- Regla 1: Precisión ---
         if (accuracy > MAX_ACCURACY_M) {
@@ -212,7 +224,7 @@ export const BiciGPS = {
       },
       {
         enableHighAccuracy: true,
-        timeout: 5000,
+        timeout: 15000,
         maximumAge: 0
       }
     );
