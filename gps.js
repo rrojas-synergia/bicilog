@@ -1,96 +1,90 @@
 // gps.js - Geolocalización y canalización con Web Worker para BiciLog
 
+const GPS_ERROR_LABELS = { 1: 'PERMISO', 2: 'NO DISP', 3: 'TIEMPO' };
+
 export const BiciGPS = {
   watchId: null,
   worker: null,
 
-  // Raw accuracy callback para UI antes del filtro
   onAccuracyUpdate: null,
+  onStatusUpdate: null,
 
   // Iniciar el seguimiento por GPS canalizando los datos al Web Worker
-  startTracking(settings, onPositionUpdate, onError) {
+  async startTracking(settings, onPositionUpdate, onError) {
     if (!navigator.geolocation) {
       if (onError) onError(new Error("La geolocalización no está soportada en este dispositivo."));
       return;
     }
 
-    this.stopTracking(); // Detener cualquier instancia previa
+    this.stopTracking();
+
+    // --- iOS KICKSTART: getCurrentPosition fuerza al OS a despertar el GPS ---
+    try {
+      await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          () => resolve(),
+          () => resolve(),
+          { enableHighAccuracy: true, timeout: 3000, maximumAge: 10000 }
+        );
+      });
+      console.log('[GPS] Kickstart completado. Iniciando watchPosition...');
+    } catch (_) { /* nunca falla */ }
 
     // 1. Inicializar el Web Worker
     try {
       this.worker = new Worker('gps-worker.js');
-      
-      // Enviar configuración inicial (Pesos para cálculo de Watts)
+
       this.worker.postMessage({
         type: 'CONFIGURE',
-        data: {
-          riderWeight: settings.weight || 70,
-          bikeWeight: settings.bikeWeight || 10
-        }
+        data: { riderWeight: settings.weight || 70, bikeWeight: settings.bikeWeight || 10 }
       });
-      
-      // Escuchar datos procesados del Worker
+
       this.worker.onmessage = (e) => {
         const { type, data } = e.data;
         if (type === 'GPS_PROCESSED' && onPositionUpdate) {
           onPositionUpdate({
-            latitude: data.lat,
-            longitude: data.lon,
-            altitude: data.alt,
-            speed: data.speed,
-            distance: data.distance,
-            ascent: data.ascent,
-            grade: data.grade,
-            power: data.power,
-            accuracy: data.accuracy,
+            latitude: data.lat, longitude: data.lon, altitude: data.alt,
+            speed: data.speed, distance: data.distance, ascent: data.ascent,
+            grade: data.grade, power: data.power, accuracy: data.accuracy,
             climbInfo: data.climbInfo
           });
         }
       };
     } catch (e) {
       console.error("Error al arrancar Web Worker, cayendo en procesamiento síncrono:", e);
-      // Caída síncrona en caso de que los Web Workers estén bloqueados por políticas de seguridad
       this.startFallbackTracking(settings, onPositionUpdate, onError);
       return;
     }
 
     const options = {
       enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 0
+      timeout: 30000,
+      maximumAge: 10000
     };
 
     // 2. Escuchar Geolocalización nativa y enviar al Worker
     this.watchId = navigator.geolocation.watchPosition(
       (position) => {
         const coords = position.coords;
-
-        // Actualizar UI de accuracy ANTES del filtro (para que el usuario vea progreso)
-        if (this.onAccuracyUpdate) {
-          this.onAccuracyUpdate(coords.accuracy);
-        }
+        if (this.onAccuracyUpdate) this.onAccuracyUpdate(coords.accuracy);
+        if (this.onStatusUpdate) this.onStatusUpdate(null);
 
         if (this.worker) {
           this.worker.postMessage({
             type: 'GPS_RAW',
             data: {
-              lat: coords.latitude,
-              lon: coords.longitude,
-              alt: coords.altitude,
-              speed: coords.speed, // m/s
-              timestamp: position.timestamp,
-              accuracy: coords.accuracy
+              lat: coords.latitude, lon: coords.longitude, alt: coords.altitude,
+              speed: coords.speed, timestamp: position.timestamp, accuracy: coords.accuracy
             }
           });
         }
       },
       (error) => {
-        // Firewall GPS: el watcher NUNCA se detiene, el error se aísla
-        console.warn("[GPS] Error temporal (watcher sigue activo):", error.code, error.message);
-        if (onError) {
-          // Notificar a la UI sin detener el flujo
-          onError({ code: error.code, message: error.message });
-        }
+        console.warn("[GPS] Error (watcher sigue activo):", error.code, error.message);
+        // Superficiar el error en la UI
+        const label = GPS_ERROR_LABELS[error.code] || 'ERROR';
+        if (this.onStatusUpdate) this.onStatusUpdate(`GPS: ${label}`);
+        if (onError) onError({ code: error.code, message: error.message });
       },
       options
     );
@@ -137,6 +131,7 @@ export const BiciGPS = {
         if (this.onAccuracyUpdate) {
           this.onAccuracyUpdate(coords.accuracy);
         }
+        if (this.onStatusUpdate) this.onStatusUpdate(null);
 
         // --- Regla 1: Precisión ---
         if (accuracy > MAX_ACCURACY_M) {
@@ -220,12 +215,14 @@ export const BiciGPS = {
       },
       (error) => {
         console.error("Error de sensor GPS nativo (fallback):", error);
+        const label = GPS_ERROR_LABELS[error.code] || 'ERROR';
+        if (this.onStatusUpdate) this.onStatusUpdate(`GPS: ${label}`);
         if (onError) onError(error);
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
+        timeout: 30000,
+        maximumAge: 10000
       }
     );
   }

@@ -2072,6 +2072,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Accuracy UI: actualizar ANTES del filtro GPS, no después
   BiciGPS.onAccuracyUpdate = updateGpsAccuracyUI;
+  BiciGPS.onStatusUpdate = (status) => {
+    if (status) {
+      DOM.gpsAccuracy.textContent = status;
+      DOM.gpsAccuracy.style.color = 'var(--color-danger)';
+    }
+    // Si status es null, se limpia — onAccuracyUpdate lo actualizará después
+  };
 
   // ===== BOOT SEQUENCE: Dashboard INMEDIATO. DB y Firebase DESPUÉS. =====
   console.log('[Boot] DOMContentLoaded. Registrando event listeners...');
