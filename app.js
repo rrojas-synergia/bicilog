@@ -8,7 +8,7 @@ import { BiciCharts } from './charts.js';
 import { FBAuth, saveRideToFirestore, saveUserProfile, getUserProfile, updateLiveTelemetry, clearLiveTelemetry, subscribeActiveRides, getCoachClubCode, upgradeToCoach } from './firebase.js';
 import { CrashDetector } from './crash-detector.js';
 
-const APP_VERSION = "0.0.6";
+const APP_VERSION = "0.0.7";
 
 // --- ESTADO GLOBAL DE LA APLICACIÓN ---
 const AppState = {
@@ -288,7 +288,7 @@ function updateGpsAccuracyUI(accuracy) {
   }
   const m = Math.round(accuracy);
   DOM.gpsAccuracy.textContent = `GPS: ${m}m`;
-  DOM.gpsAccuracy.style.color = m < 10 ? '#1DD1A1' : '#FF9F43';
+  DOM.gpsAccuracy.style.color = m <= 25 ? 'var(--color-success)' : '#FF9F43';
 }
 
 function updateLiveClock() {

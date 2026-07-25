@@ -1,6 +1,6 @@
 // sw.js - Service Worker con Soporte Offline y Background Sync Autónomo para BiciLog
 
-const CACHE_NAME = 'bicilog-v6';
+const CACHE_NAME = 'bicilog-v7';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
