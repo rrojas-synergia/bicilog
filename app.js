@@ -773,9 +773,30 @@ function startWorkout() {
         samples: AppState.activeRide.samples,
         zoneTimes: AppState.activeRide.zoneTimes,
         simulationActive: AppState.simulation.isActive,
-        targetCoords: AppState.activeRide.targetCoords
+        targetCoords: AppState.activeRide.targetCoords,
+        lat: AppState.activeRide.lat,
+        lon: AppState.activeRide.lon,
+        movingTimeSeconds: AppState.activeRide.movingTimeSeconds || 0
       });
     }
+
+    // Crash Recovery: guardar cada tick incluso en auto-pausa
+    Storage.saveActiveSession({
+      elapsedSeconds: AppState.activeRide.elapsedSeconds,
+      distance: AppState.activeRide.distance,
+      ascent: AppState.activeRide.ascent,
+      hr: AppState.activeRide.hr,
+      cadence: AppState.activeRide.cadence,
+      respiration: AppState.activeRide.respiration,
+      temp: AppState.activeRide.temp,
+      samples: AppState.activeRide.samples,
+      zoneTimes: AppState.activeRide.zoneTimes,
+      simulationActive: AppState.simulation.isActive,
+      targetCoords: AppState.activeRide.targetCoords,
+      lat: AppState.activeRide.lat,
+      lon: AppState.activeRide.lon,
+      movingTimeSeconds: AppState.activeRide.movingTimeSeconds || 0
+    });
   }, 1000);
 
   // 2. Iniciar Toma de Muestras
@@ -2077,6 +2098,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ===== BOOT SEQUENCE: Dashboard INMEDIATO. DB y Firebase DESPUÉS. =====
   console.log('[Boot] DOMContentLoaded. Registrando event listeners...');
+
+  // Auto-Recovery: si hay sesión activa guardada, mostrar modal de recuperación
+  const savedSession = Storage.getActiveSession();
+  if (savedSession && savedSession.elapsedSeconds > 0) {
+    DOM.recoveryTime.textContent = BiciCharts.formatDuration(savedSession.elapsedSeconds);
+    DOM.recoveryDistance.textContent = (savedSession.distance || 0).toFixed(2) + ' km';
+    DOM.sessionRecoveryModal.classList.remove('hide');
+  }
 
   // 1. Cargar dashboard inmediatamente (sin esperar DB ni Firebase)
   loadDashboardData();
